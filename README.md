@@ -9,6 +9,11 @@
 ```bash
 npm install -g ganache-cli
 ```
+Note, windows should set PATH variable:
+
+```
+set PATH=C:\Users\[user name]\AppData\Roaming\npm;%PATH%
+```
 
 ### pipx Python@3.10.9
 

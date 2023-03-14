@@ -12,17 +12,38 @@ def main():
     print('mint currency for account {}: {}'.format(i, currency.balanceOf(accounts[i])))
 
   # deploy contract
-  fee = 5
-  sf = stake2Follow.deploy(fee, currency.address, {'from': accounts[0]})
+  stakeValue = 1000
+  gasFee = 5
+  rewardFee = 10
+  maxProfiles = 20
+  sf = stake2Follow.deploy(
+    stakeValue,
+    gasFee,
+    rewardFee,
+    maxProfiles,
+    currency.address, {'from': accounts[0]}
+  )
+
+  # qualifies = 2
+  # bits = 0
+  # bits |= (1 << 3)
+  # bits |= (1 << 6)
+  # bits = (bits << 8) | qualifies
+
+  # print(bits)
+  # print("{0:b}".format(bits))
+  # tx = sf.test(bits)
+  # print(tx.events)
+  # return
 
   # ATTENSION: we should first get accounts approve to stake
   for i in range(1, 8):
     currency.approve(sf.address, 10000, {'from': accounts[i]})
 
   # set fee
-  fee = 10
-  sf.setFee(fee, {'from': accounts[0]})
-  print('fee changed to {}'.format(sf.getFee()))
+  gasFee = 10
+  sf.setGasFee(gasFee, {'from': accounts[0]})
+  print('fee changed to {}'.format(sf.getGasFee()))
 
   # set hub address
   sf.setHub(accounts[8], {'from': accounts[0]})
@@ -36,29 +57,39 @@ def main():
   roundId = '#round_1'
 
   # profiles stake
-  fund = 1000
-  fee = (fund / 100) * 10
-  print('fee: ', fee)
   for i in range(1, 8):
-    sf.profileStake(fund + fee, roundId, accounts[i], {'from': accounts[i]})
+    tx = sf.profileStake(roundId, accounts[i], {'from': accounts[i]})
     print('account {} staked'.format(i))
+    print(tx.events)
 
-  # withdraw is allowed before freeze
-  sf.profileWithdraw(roundId, accounts[7], {'from': accounts[7]})
 
   # freeze
-  sf.roundFreeze(roundId, {'from': accounts[8]})
+  tx = sf.roundFreeze(roundId, {'from': accounts[8]})
   print('current total fund: {} vs {}'.format(sf.getRoundFund(roundId), currency.balanceOf(sf.address)))
   print('fee collected: {}'.format(currency.balanceOf(accounts[9])))
+  print('round data:')
+  print(tx.return_value)
 
   # open claim
-  sf.roundClaim(roundId, {'from': accounts[8]})
+  qualifies = 3
+  bits = 0
+  bits |= (1 << 0)
+  bits |= (1 << 1)
+  bits |= (1 << 3)
+  bits = (bits << 8) | qualifies
+  tx = sf.roundClaim(roundId, bits, {'from': accounts[8]})
+  print(tx.events)
 
-  sf.profileClaim(roundId, accounts[1], 1000, {'from': accounts[8]})
-  sf.profileClaim(roundId, accounts[2], 2000, {'from': accounts[8]})
-  sf.profileClaim(roundId, accounts[3], 1000, {'from': accounts[8]})
+  tx = sf.profileClaim(roundId, accounts[1], {'from': accounts[8]})
+  print(tx.events)
+  tx = sf.profileClaim(roundId, accounts[2], {'from': accounts[8]})
+  print(tx.events)
+  # tx = sf.profileClaim(roundId, accounts[4], {'from': accounts[8]})
+  # print(tx.events)
   print('current total fund: {}'.format(sf.getRoundFund(roundId)))
-
+  tx = sf.getRoundData.call(roundId)
+  print('round data: ')
+  print(tx)
 
   ####### In emergency ###########
   sf.circuitBreaker({'from': accounts[0]})

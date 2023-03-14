@@ -19,8 +19,17 @@ def stake2follow(stake2Follow, accounts):
     currency._mint_for_testing(accounts[i], 1e5)
 
   # deploy contract
-  fee = 5
-  sf = stake2Follow.deploy(fee, currency.address, {'from': accounts[0]})
+  stakeValue = 1000
+  gasFee = 5
+  rewardFee = 10
+  maxProfiles = 20
+  sf = stake2Follow.deploy(
+    stakeValue,
+    gasFee,
+    rewardFee,
+    maxProfiles,
+    currency.address, {'from': accounts[0]}
+  )
 
   # set hub address
   sf.setHub(accounts[8], {'from': accounts[0]})
