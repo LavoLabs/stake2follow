@@ -309,13 +309,7 @@ contract stake2Follow {
      */
     function roundFreeze(
         string memory roundId
-    ) external stopInEmergency onlyHub returns (Stake2FollowData memory) {
-        // Check round has fund
-        require(
-            dataByRound[roundId].fund > 0,
-            "Errors.stake2Follow__freeze_RoundHasNoFund(): Round has no fund"
-        );
-
+    ) external stopInEmergency onlyHub {
         // Check round in open stage
         require(
             dataByRound[roundId].stage == ROUND_STAGE.OPEN,
@@ -328,10 +322,7 @@ contract stake2Follow {
             roundId,
             dataByRound[roundId].fund
         );
-
-        return dataByRound[roundId];
     }
-
 
     /**
      * @dev open the round for claim.
