@@ -39,6 +39,7 @@ struct Stake2FollowData {
     uint256 fund;
     uint256 qualify;
     address[] profiles;
+    uint256[] profileIds;
     ROUND_STAGE stage;
 }
 
@@ -116,10 +117,10 @@ contract stake2Follow {
         uint256 fund,
         address sender
     );
-    event stake2Follow_SetGasFee(uint256 fee);
-    event stake2Follow_SetRewardFee(uint256 fee);
-    event stake2Follow_SetMaxProfiles(uint256 profiles);
-    event stake2Follow_SetStakeValue(uint256 value);
+    event stake2Follow__SetGasFee(uint256 fee);
+    event stake2Follow__SetRewardFee(uint256 fee);
+    event stake2Follow__SetMaxProfiles(uint256 profiles);
+    event stake2Follow__SetStakeValue(uint256 value);
     event stake2Follow__withdraw(uint256 balance);
 
     constructor(uint256 stakeValue, uint256 gasFee, uint256 rewardFee, uint8 maxProfiles, address wMatic) {
@@ -223,10 +224,12 @@ contract stake2Follow {
     /**
      * @dev Each participant stake the fund to the round.
      * @param roundId The ID of the round.
+     * @param profileId The ID of len profile.
      * @param profileAddress The address of the profile that staking.
      */
     function profileStake(
         string memory roundId,
+        uint256 profileId,
         address profileAddress
     ) external stopInEmergency {
         // Check if the msg.sender is the profile owner
@@ -276,6 +279,7 @@ contract stake2Follow {
 
         // add profile
         dataByRound[roundId].profiles.push(profileAddress);
+        dataByRound[roundId].profileIds.push(profileId);
 
         emit stake2Follow__ProfileStake(
             roundId,
@@ -432,7 +436,7 @@ contract stake2Follow {
             "Errors.stake2Follow__setFee_FeeInvalid(): Fee invalid"
         );
         i_gasFee = fee;
-        emit stake2Follow_SetGasFee(fee);
+        emit stake2Follow__SetGasFee(fee);
     }
 
     /**
@@ -452,7 +456,7 @@ contract stake2Follow {
             "Errors.stake2Follow__setFee_FeeInvalid(): Fee invalid"
         );
         i_rewardFee = fee;
-        emit stake2Follow_SetRewardFee(fee);
+        emit stake2Follow__SetRewardFee(fee);
     }
 
     /**
@@ -473,7 +477,7 @@ contract stake2Follow {
         );
 
         i_stakeValue = stakeValue;
-        emit stake2Follow_SetStakeValue(stakeValue);
+        emit stake2Follow__SetStakeValue(stakeValue);
     }
 
     /**
@@ -493,7 +497,7 @@ contract stake2Follow {
             "Errors.stake2Follow__setMaxProfiles_ParaInvalid(): Param invalid"
         );
         i_maxProfiles = profiles;
-        emit stake2Follow_SetMaxProfiles(profiles);
+        emit stake2Follow__SetMaxProfiles(profiles);
     }
 
     /**
