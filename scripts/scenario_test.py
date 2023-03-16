@@ -1,6 +1,8 @@
 
 from brownie import stake2Follow, accounts
 from brownie_tokens import ERC20
+from datetime import datetime, timedelta
+import time
 
 def main():
 
@@ -54,18 +56,19 @@ def main():
   print('multisig: {} vs {}'.format(sf.getMultisig(), accounts[9]))
 
   # round start
-  roundId = '#round_1'
+  freezeTime = datetime.now() + timedelta(minutes=4)
+  sf.openRound(freezeTime.timestamp(), {'from': accounts[8]})
 
   # profiles stake
   for i in range(1, 8):
-    tx = sf.profileStake(roundId, accounts[i], {'from': accounts[i]})
+    tx = sf.profileStake(i, accounts[i], {'from': accounts[i]})
     print('account {} staked'.format(i))
     print(tx.events)
 
+  time.sleep(3 * 60) 
 
   # freeze
-  tx = sf.roundFreeze(roundId, {'from': accounts[8]})
-  print('current total fund: {} vs {}'.format(sf.getRoundFund(roundId), currency.balanceOf(sf.address)))
+  print('current total fund: {} vs {}'.format(sf.getRoundFund(), currency.balanceOf(sf.address)))
   print('fee collected: {}'.format(currency.balanceOf(accounts[9])))
   print('round data:')
   print(tx.return_value)
@@ -77,17 +80,17 @@ def main():
   bits |= (1 << 1)
   bits |= (1 << 3)
   bits = (bits << 8) | qualifies
-  tx = sf.roundClaim(roundId, bits, {'from': accounts[8]})
+  tx = sf.closeRound(bits, {'from': accounts[8]})
   print(tx.events)
 
-  tx = sf.profileClaim(roundId, accounts[1], {'from': accounts[8]})
+  tx = sf.profileClaim(accounts[1], {'from': accounts[8]})
   print(tx.events)
-  tx = sf.profileClaim(roundId, accounts[2], {'from': accounts[8]})
+  tx = sf.profileClaim(accounts[2], {'from': accounts[8]})
   print(tx.events)
   # tx = sf.profileClaim(roundId, accounts[4], {'from': accounts[8]})
   # print(tx.events)
-  print('current total fund: {}'.format(sf.getRoundFund(roundId)))
-  tx = sf.getRoundData.call(roundId)
+  print('current total fund: {}'.format(sf.getRoundFund()))
+  tx = sf.getRoundData.call()
   print('round data: ')
   print(tx)
 
@@ -101,10 +104,3 @@ def main():
   # withdraw: all the fund in this contract transferd to contract deployer
   sf.withdraw()
   print('owner withdrawed: {}'.format(currency.balanceOf(accounts[0])))
-
-
-
-
-
-
-
