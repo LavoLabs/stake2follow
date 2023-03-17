@@ -46,6 +46,13 @@ struct Stake2FollowData {
     ROUND_STAGE stage;
 }
 
+struct Stake2FollowConfig {
+    uint256 stakeValue;
+    uint256 gasFee;
+    uint256 rewardFee;
+    uint256 maxProfiles;
+}
+
 contract stake2Follow {
     // Address of the deployer.
     address public owner;
@@ -509,6 +516,15 @@ contract stake2Follow {
      */
     function getMaxProfiles() public view returns (uint256) {
         return i_maxProfiles;
+    }
+
+    function getConfig() public view returns (Stake2FollowConfig memory) {
+        return Stake2FollowConfig({
+            stakeValue: i_stakeValue,
+            gasFee: i_gasFee,
+            rewardFee: i_rewardFee,
+            maxProfiles: i_maxProfiles
+        });
     }
 
     /**

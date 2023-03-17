@@ -88,3 +88,8 @@ Enter the password to encrypt this account with:
 ae58ff18f48099edd126cb559ca0022264f34f732a1021bf59b6618ab4206ffa
 8c4c8ef409543fe09837da154be27cd79a1f8617cbdbe4e4f14858ce826dd173
 ```
+
+
+```
+from scripts.deploy_contract import *
+```

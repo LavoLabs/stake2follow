@@ -65,7 +65,7 @@ def main():
     print('account {} staked'.format(i))
     print(tx.events)
 
-  time.sleep(3 * 60) 
+  time.sleep(4 * 60) 
 
   # freeze
   print('current total fund: {} vs {}'.format(sf.getRoundFund(), currency.balanceOf(sf.address)))
