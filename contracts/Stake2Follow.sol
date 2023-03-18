@@ -375,7 +375,10 @@ contract stake2Follow {
         // calculate reward
         uint256 reward = i_stakeValue * (profileNum - qualifyNum);
         uint256 rewardFee = (reward / 100) * i_rewardFee;
-        uint256 avgReward = (reward - rewardFee) / qualifyNum;
+        uint256 avgReward = 0;
+        if (qualifyNum > 0) {
+            avgReward = (reward - rewardFee) / qualifyNum;
+        }
 
         uint256 qualifyNum2 = 0;
         for (uint i = 0; i < profileNum; i++) {
