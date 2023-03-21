@@ -12,47 +12,6 @@ import "OpenZeppelin/openzeppelin-contracts@4.5.0/contracts/token/ERC721/IERC721
  * @notice A contract to encourage follow on Lens Protocol by staking
  */
 
-
-/**
- * stages of a Stake Round
- * 
- */
-enum ROUND_STAGE {
-    // Round is open, Allow profiles to stake
-    OPEN,
-    // Round is close, Allow profile to claim
-    CLOSE
-}
-
-/**
- * @notice A struct containing stake round informations including total funds, stage etc.
- *
- * @param startTime round start time
- * @param freezeTime round freeze time, after freeze, no one can stake any more, and the round is calculating for close
- * @param reward Average reward
- * @param claim Whether profile has claimed
- * @param qualify The qualify of profile to claim
- * @param profiles profile id array, using array because we want to iter it in our web app
- * @param stage Round stage
- * 
- */
-struct Stake2FollowData {
-    uint256 startTime;
-    uint256 freezeTime;
-    uint256 reward;
-    uint256 claimed;
-    uint256 qualify;
-    uint256[] profileIds;
-    ROUND_STAGE stage;
-}
-
-struct Stake2FollowConfig {
-    uint256 stakeValue;
-    uint256 gasFee;
-    uint256 rewardFee;
-    uint256 maxProfiles;
-}
-
 contract stake2Follow {
     // Address of the deployer.
     address public owner;
@@ -64,11 +23,11 @@ contract stake2Follow {
     bool private stopped = false;
     // The address of hub contract.
     address public s_hub;
-    // The minimum claim possible.
-    //uint256 immutable i_minClaim;
     // SafeERC20 to transfer tokens.
     using SafeERC20 for IERC20;
 
+    // genesis time
+    uint256 genesis;
 
     // stake amount of each profile
     uint256 public i_stakeValue;
@@ -80,20 +39,32 @@ contract stake2Follow {
     // The maximum profiles of each round
     uint256 public i_maxProfiles;
 
-    uint256 public currentRoundId;
+    // roundId => qualify info
+    // qualify bits    claimed bits    claimable
+    //  [0 --- 99]    [ 100 ------199]   [200]
+    mapping(uint256 => uint256) roundToQualify;
 
-    // Mapping to store the data associated with a round indexed by the round ID
-    mapping(uint256 => Stake2FollowData) dataByRound;
+    // roundId => reward
+    mapping(uint256 => uint256) roundToReward;
 
-    // profileId -> roundId mapping. only record last 256 rounds
-    mapping(uint256 => uint256) profileToRounds;
+    /// roundId => profiles
+    mapping(uint256 => uint256[]) roundToProfiles;
+
+    // profiles => roundIds
+    mapping(uint256 => uint256[]) profileToRounds;
 
     // profileId -> address
     mapping(uint256 => address) profileToAddress;
 
+    // uint256 public constant MAXIMAL_PROFILES = 100;
+    // uint256 public constant ROUND_OPEN_LENGTH = 60 minutes;
+    // uint256 public constant ROUND_FREEZE_LENGTH = 30 minutes;
+    // uint256 public constant ROUND_GAP_LENGTH = 120 minutes;
 
-    uint256 public constant MIN_LENGTH_ROUND = 3 minutes;
-    uint256 public constant MAX_LENGTH_ROUND = 1 days + 5 minutes;
+    uint256 public constant MAXIMAL_PROFILES = 5;
+    uint256 public constant ROUND_OPEN_LENGTH = 5 minutes;
+    uint256 public constant ROUND_FREEZE_LENGTH = 5 minutes;
+    uint256 public constant ROUND_GAP_LENGTH = 15 minutes;
 
     // Events
     event stake2Follow__HubSet(address hub, address sender);
@@ -103,24 +74,12 @@ contract stake2Follow {
         uint256 roundId,
         address profileAddress,
         uint256 stake,
-        uint256 fees,
-        uint256 profiles
+        uint256 fees
     );
 
-    event stake2Follow__RoundStart(
-        uint256 roundId,
-        uint256 startTime,
-        uint256 endTime
-    );
-    event stake2Follow__RoundFreeze(
-        uint256 roundId,
-        uint256 fund
-    );
-
-    event stake2Follow__RoundClaim(
+    event stake2Follow__ClaimbleRound(
         uint256 roundId,
         uint256 reward,
-        uint256 rewardFee,
         uint256 totalProfiles,
         uint256 qualifyProfiles
     );
@@ -128,31 +87,29 @@ contract stake2Follow {
     event stake2Follow__ProfileClaim(
         uint256 roundId,
         uint256 profileId,
-        uint256 fund,
-        uint256 remainingFund
+        uint256 fund
+    );
+
+    event stake2Follow__ProfileExclude(
+        uint256 roundId,
+        uint256 qualifies
     );
 
     event stake2Follow__CircuitBreak(bool stop);
-
-    event stake2Follow__EmergencyWithdraw(
-        uint256 roundId,
-        uint256 fund,
-        address sender
-    );
     event stake2Follow__SetGasFee(uint256 fee);
     event stake2Follow__SetRewardFee(uint256 fee);
     event stake2Follow__SetMaxProfiles(uint256 profiles);
     event stake2Follow__SetStakeValue(uint256 value);
-    event stake2Follow__withdraw(uint256 balance);
+    event stake2Follow__Withdraw(uint256 balance);
 
     constructor(uint256 stakeValue, uint256 gasFee, uint256 rewardFee, uint8 maxProfiles, address wMatic) {
+        genesis = block.timestamp;
+
         i_gasFee = gasFee;
         i_rewardFee = rewardFee;
         i_wMatic = wMatic;
-        //i_minReward = 1E17;
         i_stakeValue = stakeValue;
         i_maxProfiles = maxProfiles;
-        currentRoundId = 0;
         owner = msg.sender;
     }
 
@@ -186,21 +143,29 @@ contract stake2Follow {
      * @param profileIndex The index in the profiles array
      */
     function profileClaim(
+        uint256 roundId,
         uint256 profileIndex
     ) external stopInEmergency onlyHub {
-        // Check if the round stage
+        uint256 startTime = genesis + roundId * ROUND_GAP_LENGTH;
+        // ensure round is after freeze time
         require(
-            dataByRound[currentRoundId].stage == ROUND_STAGE.CLOSE,
-            "Errors.stake2Follow__claim__RoundNotClose(): Round not close to claim"
+            (block.timestamp - startTime) > (ROUND_OPEN_LENGTH + ROUND_FREEZE_LENGTH),
+            "Errors.stake2Follow__claim__RoundIsNotOver(): Round is not over"
+        );
+
+        // ensure round is claimble
+        require(
+            ((roundToQualify[roundId] >> 200) & 1) == 1,
+            "Errors.stake2Follow__claim__RoundNotClose(): Round not ready to claim"
         );
 
         // out-of-bound check
         require(
-            profileIndex < dataByRound[currentRoundId].profileIds.length,
+            profileIndex < roundToProfiles[roundId].length,
             "Errors.stake2Follow__claim__ProfileIndexOutOfBound(): index out of bound"
         );
 
-        uint256 profileId = dataByRound[currentRoundId].profileIds[profileIndex];
+        uint256 profileId = roundToProfiles[roundId][profileIndex];
 
         // check address legal
         require(
@@ -210,42 +175,43 @@ contract stake2Follow {
 
         // Check the profile has qualify to claim
         require(
-             ((dataByRound[currentRoundId].qualify >> profileIndex) & 1) == 1,
+             ((roundToQualify[roundId] >> profileIndex) & 1) == 1,
             "Errors.stake2Follow__claim__ProfileNotQualify(): Profile not qualify to claimed"
         );
 
         // Check the profile has not claimed
         require(
-             ((dataByRound[currentRoundId].claimed >> profileIndex) & 1) == 0,
+             ((roundToQualify[roundId] >> (profileIndex + 100)) & 1) == 0,
             "Errors.stake2Follow__claim__ProfileAlreadyClaimed(): Profile already claimed"
         );
 
         // check reward
         require(
-            dataByRound[currentRoundId].reward > 0,
+            roundToReward[roundId] > 0,
             "Errors.stake2Follow_claim_RewardIsZero(): Reward is illegal"
         );
 
         // Transfer the fund to profile
-        payCurrency(profileToAddress[profileId], dataByRound[currentRoundId].reward);
+        payCurrency(profileToAddress[profileId], roundToReward[roundId]);
         
         // Set the flag indicating that the profile has already claimed
-        dataByRound[currentRoundId].claimed |= (1 << profileIndex);
+        roundToQualify[roundId] |= (1 << (100 + profileIndex));
 
         emit stake2Follow__ProfileClaim(
-            currentRoundId,
+            roundId,
             profileId,
-            reward,
-            dataByRound[currentRoundId].fund
+            roundToReward[roundId]
         );
     }
 
     /**
      * @dev Each participant stake the fund to the round.
+     * @param roundId the round id.
      * @param profileId The ID of len profile.
      * @param profileAddress The address of the profile that staking.
      */
     function profileStake(
+        uint256 roundId,
         uint256 profileId,
         address profileAddress
     ) external stopInEmergency {
@@ -261,21 +227,17 @@ contract stake2Follow {
             "Errors.stake2Follow__stake__InvalidProfileAddress(): Invalid profile address"
         );
 
+        uint256 startTime = genesis + roundId * ROUND_GAP_LENGTH;
+
         // Check round is in open stage
         require(
-            dataByRound[currentRoundId].stage == ROUND_STAGE.OPEN,
+            block.timestamp > startTime && block.timestamp < (startTime + ROUND_OPEN_LENGTH),
             "Errors.stake2Follow__stake__RoundNotOpen(): Round is not in open stage"
-        );
-
-        // check round end time
-        require(
-            block.timestamp < dataByRound[currentRoundId].freezeTime,
-            "Errors.stake2Follow__stake__RoundIsNotOpen(): Round is not open"
         );
 
         // Check profile count
         require(
-            dataByRound[currentRoundId].profiles.length < i_maxProfiles,
+            roundToProfiles[roundId].length < i_maxProfiles,
             "Errors.stake2Follow__stake__ExceedMaximumProfileLimit(): Maximum profile limit reached"
         );
 
@@ -296,14 +258,16 @@ contract stake2Follow {
         payCurrency(s_multisig, stakeFee);
 
         // add profile
-        dataByRound[currentRoundId].profileIds.push(profileId);
+        roundToProfiles[roundId].push(profileId);
+
+        // add round
+        profileToRounds[profileId].push(roundId);
 
         emit stake2Follow__ProfileStake(
-            currentRoundId,
+            roundId,
             profileAddress,
             i_stakeValue,
-            stakeFee,
-            dataByRound[currentRoundId].profiles.length
+            stakeFee
         );
     }
 
@@ -319,105 +283,95 @@ contract stake2Follow {
         );
     }
 
-    /**
-     * @dev start the round.
-     * @param freezeTime The time round freeze.
-     */
-    function openRound(
-        uint256 freezeTime
-    ) external stopInEmergency onlyHub {
-        // Check last round is in claim stage
-        // only one round can be started at same time
-        require(
-            (currentRoundId == 0) || (dataByRound[currentRoundId].stage == ROUND_STAGE.CLOSE),
-            "Errors.stake2Follow__start__LastRoundNotFinish(): Last Round is not finish"
-        );
-
-        // Check round length
-        require(
-            ((freezeTime - block.timestamp) > MIN_LENGTH_ROUND) && ((freezeTime - block.timestamp) < MAX_LENGTH_ROUND),
-            "Errors.stake2Follow__start__RoundLengthOutOfRange(): Round length out of range"
-        );
-
-        // update current round
-        currentRoundId++;
-
-        // mark round to open
-        dataByRound[currentRoundId].stage = ROUND_STAGE.OPEN;
-        dataByRound[currentRoundId].startTime = block.timestamp;
-        dataByRound[currentRoundId].freezeTime = freezeTime;
-
-        emit stake2Follow__RoundStart(
-            currentRoundId,
-            block.timestamp,
-            freezeTime
-        );
-    }
 
     /**
-     * @dev close the round.
+     * @dev make round claimble
      * @param qualifies Bit array to indicate profile qualification of claim
      */
-    function closeRound(
+    function claimbleRound(
+        uint256 roundId,
         uint256 qualifies
     ) external stopInEmergency onlyHub {
-        // Check round in open stage
+        uint256 startTime = genesis + roundId * ROUND_GAP_LENGTH;
+        // ensure round is after freeze time
         require(
-            dataByRound[currentRoundId].stage == ROUND_STAGE.OPEN,
-            "Errors.stake2Follow__claim__RoundNotOpen(): Round is not in OPEN"
+            (block.timestamp - startTime) > (ROUND_OPEN_LENGTH + ROUND_FREEZE_LENGTH),
+            "Errors.stake2Follow__claim__RoundIsNotOver(): Round is not over"
         );
 
-        // round is end
-        require(
-            block.timestamp > dataByRound[currentRoundId].freezeTime,
-            "Errors.stake2Follow__claim__RoundNotEnd(): Round is not freeze, only freeze round can be close"
-        );
-
-        uint256 profileNum = dataByRound[currentRoundId].profileIds.length;
+        uint256 profileNum = roundToProfiles[roundId].length;
         // get how many qualifies
         uint256 qualifyNum = 0;
         for (uint256 i = 0; i < profileNum; i++) {
-            // get i-th bit of qualifies
-            //profileToReward[data.profiles[i]] = (i_stakeValue + avgReward) * qualify;
             qualifyNum += ((qualifies >> i) & 1);
         }
 
+        require(
+            profileNum >= qualifyNum,
+            "Errors.stake2Follow__claim__ClaimbleRound(): bad qualifies input"
+        );
+
         // calculate reward
         if (qualifyNum == profileNum) {
-            dataByRound[currentRoundId].reward = i_stakeValue;
+            roundToReward[roundId] = i_stakeValue;
         } else {
             uint256 reward = i_stakeValue * (profileNum - qualifyNum);
             uint256 rewardFee = (reward / 100) * i_rewardFee;
 
-            dataByRound[currentRoundId].reward = i_stakeValue + ((reward - rewardFee) / qualifyNum);
+            roundToReward[roundId] = i_stakeValue + ((reward - rewardFee) / qualifyNum);
+
             // transfer fees
             payCurrency(s_multisig, rewardFee);
         }
 
         // record
-        dataByRound[currentRoundId].qualify = qualifies;
-        dataByRound[currentRoundId].stage = ROUND_STAGE.CLOSE;
+        roundToQualify[roundId] |= qualifies;
 
-        emit stake2Follow__RoundClaim(
-            currentRoundId,
-            reward,
-            rewardFee,
+        emit stake2Follow__ClaimbleRound(
+            roundId,
+            roundToReward[roundId],
             profileNum,
             qualifyNum
         );
     }
 
     /**
-     * @dev Gets the fund for a round.
-     * @return The fund for the round.
+     * @dev exclude profiles which is illegal
+     * @param roundId current round id
+     * @param illegals Bit array to indicate profile qualification of claim
      */
-    function getRoundFund() public view returns (uint256) {
-        // Get fund for this round
-        return dataByRound[currentRoundId].fund;
+    function profileExclude(
+        uint256 roundId,
+        uint256 illegals
+    ) external stopInEmergency onlyHub {
+        // ensure round is not claimble
+        require(
+            ((roundToQualify[roundId] >> 200) & 1) == 0,
+            "Errors.stake2Follow__profileExclude__RoundIsClose(): Round is finish"
+        );
+
+        uint256 profileNum = roundToProfiles[roundId].length;
+        uint256 illegalNum = 0;
+        for (uint256 i = 0; i < profileNum; i++) {
+            illegalNum += ((illegals >> i) & 1);
+        }
+
+        require(
+            profileNum >= illegalNum,
+            "Errors.stake2Follow__profileExclude__profileExclude(): bad illegals input"
+        );
+
+        roundToQualify[roundId] |= (illegals << 100);
+
+        emit stake2Follow__ProfileExclude(roundId, roundToQualify[roundId]);
     }
 
-    function getRoundData() public view returns (Stake2FollowData memory) {
-        return dataByRound[currentRoundId];
+    function getRoundData(uint256 roundId) public view returns (uint256 qualify, uint256 reward, uint256[] memory profiles) {
+        return (roundToQualify[roundId], roundToReward[roundId], roundToProfiles[roundId]);
+    }
+
+    function getProfileRounds(uint256 profileId) public view returns (uint256[] memory roundIds) {
+        return profileToRounds[profileId];
     }
 
     /**
@@ -478,11 +432,6 @@ contract stake2Follow {
      * @param stakeValue stake value
      */
     function setStakeValue(uint256 stakeValue) public onlyOwner {
-        require(
-            stakeValue < 10000,
-            "Errors.stake2Follow__setStakeValue_ParaInvalid(): Param invalid"
-        );
-
         i_stakeValue = stakeValue;
         emit stake2Follow__SetStakeValue(stakeValue);
     }
@@ -500,7 +449,7 @@ contract stake2Follow {
      */
     function setMaxProfiles(uint256 profiles) public onlyOwner {
         require(
-            profiles < 248,
+            profiles <= MAXIMAL_PROFILES,
             "Errors.stake2Follow__setMaxProfiles_ParaInvalid(): Param invalid"
         );
         i_maxProfiles = profiles;
@@ -514,13 +463,17 @@ contract stake2Follow {
         return i_maxProfiles;
     }
 
-    function getConfig() public view returns (Stake2FollowConfig memory) {
-        return Stake2FollowConfig({
-            stakeValue: i_stakeValue,
-            gasFee: i_gasFee,
-            rewardFee: i_rewardFee,
-            maxProfiles: i_maxProfiles
-        });
+    function getConfig() public view returns (
+        uint256 stakeValue, 
+        uint256 gasFee, 
+        uint256 rewardFee, 
+        uint256 maxProfiles,
+        uint256 genesis,
+        uint256 roundOpenLength,
+        uint256 roundFreezeLength,
+        uint256 roundGapLength
+        ) {
+        return (i_stakeValue, i_gasFee, i_rewardFee, i_maxProfiles, genesis, ROUND_OPEN_LENGTH, ROUND_FREEZE_LENGTH, ROUND_GAP_LENGTH);
     }
 
     /**
@@ -536,45 +489,14 @@ contract stake2Follow {
         return s_multisig;
     }
 
-    function isRoundOpen() public view returns (bool) {
-        return ((dataByRound[currentRoundId].stage == ROUND_STAGE.OPEN) && (block.timestamp <= dataByRound[currentRoundId].freezeTime));
-    }
-
-    function isRoundFreeze() public view returns (bool) {
-        return ((dataByRound[currentRoundId].stage == ROUND_STAGE.OPEN) && (block.timestamp > dataByRound[currentRoundId].freezeTime));
-    }
-
-    function isRoundClose() public view returns (bool) {
-        return (dataByRound[currentRoundId].stage == ROUND_STAGE.CLOSE);
+    function getCurrentRound() public view returns (uint256 roundId, uint256 startTime) {
+        uint256 crrentRoundId = (block.timestamp - genesis) / ROUND_GAP_LENGTH;
+        return (crrentRoundId, genesis + crrentRoundId * ROUND_GAP_LENGTH);
     }
 
     function circuitBreaker() public onlyOwner {
         stopped = !stopped;
         emit stake2Follow__CircuitBreak(stopped);
-    }
-
-    function withdrawRound() public onlyInEmergency onlyHub {
-        // Check round stage
-        require(
-            dataByRound[currentRoundId].stage != ROUND_STAGE.OPEN,
-            "Errors.stake2Follow__EmergencyWithdraw__RoundIsOpen(): Round is Open"
-        );
-
-        // Check that there is enough funds to withdraw
-        require(
-            dataByRound[currentRoundId].fund > 0,
-            "Errors.stake2Follow__EmergencyWithdraw__NotEnoughFundToWithdraw(): The fund is empty"
-        );
-
-        // withdraw to hub address
-        payCurrency(msg.sender, dataByRound[currentRoundId].fund);
-
-        emit stake2Follow__EmergencyWithdraw(
-            currentRoundId,
-            dataByRound[currentRoundId].fund,
-            msg.sender
-        );
-        dataByRound[currentRoundId].fund = 0;
     }
 
     function withdraw() public onlyInEmergency onlyOwner {
@@ -586,7 +508,7 @@ contract stake2Follow {
         );
 
         payCurrency(msg.sender, balance);
-        emit stake2Follow__withdraw(balance);
+        emit stake2Follow__Withdraw(balance);
     }
 
     /** @notice To be able to pay and fallback
