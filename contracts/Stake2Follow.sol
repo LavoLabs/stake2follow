@@ -37,9 +37,6 @@ contract stake2Follow {
     //  [0 --- 49]    [50------99]  [100------149]
     mapping(uint256 => uint256) roundToQualify;
 
-    // roundId => reward
-    mapping(uint256 => uint256) roundToReward;
-
     /// roundId => profiles
     mapping(uint256 => uint256[]) roundToProfiles;
 
@@ -172,7 +169,7 @@ contract stake2Follow {
         uint256 profileNum = roundToProfiles[roundId].length;
         uint256 qualifyNum = 0;
         for (uint256 i = 0; i < profileNum; i++) {
-            if (isClaimable(roundId, profileIndex) && !isExcluded(roundId, profileIndex)) {
+            if (isClaimable(roundId, i) && !isExcluded(roundId, i)) {
                 qualifyNum += 1;
             }
         }
@@ -213,14 +210,14 @@ contract stake2Follow {
         require(roundToProfiles[roundId].length < maxProfiles, "Maximum profile limit reached");
         // TODO: check not staked before
         // total profiles is small, so this loop is ok
-        // bool alreadyIn = false;
-        // for (uint32 i = 0; i < roundToProfiles[roundId].length; i += 1) {
-        //     if (roundToProfiles[i] ==  profileId) {
-        //         alreadyIn = true;
-        //         break;
-        //     }
-        // }
-        // require(!alreadyIn, "profile already paticipant");
+        bool alreadyIn = false;
+        for (uint32 i = 0; i < roundToProfiles[roundId].length; i += 1) {
+            if (roundToProfiles[roundId][i] ==  profileId) {
+                alreadyIn = true;
+                break;
+            }
+        }
+        require(!alreadyIn, "profile already paticipant");
 
         // bind address to profile
         profileToAddress[profileId] = profileAddress;
@@ -251,8 +248,11 @@ contract stake2Follow {
      * @dev qualify profile
      */
     function profileQualify(uint256 roundId, uint256 qualify) external stopInEmergency onlyApp {
+        require(!isOpen(roundId), "Round is open");
         // ensure round is not settle
         require(!isSettle(roundId), "Round is settle");
+        require(qualify > 0, "qualify should not be zero");
+        require(roundToProfiles[roundId].length > 0, "profiles is empty");
         // set last #profiles bits
         roundToQualify[roundId] |= (((1 << roundToProfiles[roundId].length) - 1) & qualify);
         emit ProfileQualify(roundId, qualify);
@@ -266,6 +266,9 @@ contract stake2Follow {
     function profileExclude(uint256 roundId, uint256 illegals) external stopInEmergency onlyApp {
         // round not settle
         require(!isSettle(roundId), "Round is settle");
+        require(illegals > 0, "qualify should not be zero");
+        require(roundToProfiles[roundId].length > 0, "profiles is empty");
+
         roundToQualify[roundId] |= ((((1 << roundToProfiles[roundId].length) - 1) & illegals) << 50);
         emit ProfileExclude(roundId, illegals);
     }
@@ -275,8 +278,8 @@ contract stake2Follow {
         return (crrentRoundId, genesis + crrentRoundId * ROUND_GAP_LENGTH);
     }
 
-    function getRoundData(uint256 roundId) public view returns (uint256 qualify, uint256 reward, uint256[] memory profiles) {
-        return (roundToQualify[roundId], roundToReward[roundId], roundToProfiles[roundId]);
+    function getRoundData(uint256 roundId) public view returns (uint256 qualify, uint256[] memory profiles) {
+        return (roundToQualify[roundId], roundToProfiles[roundId]);
     }
 
     function getProfileRounds(uint256 profileId) public view returns (uint256[] memory roundIds) {
