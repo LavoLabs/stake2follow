@@ -12,6 +12,13 @@ def deploy():
   abi = json.loads(binary['result'])
   usdc = Contract.from_abi('USDC', usdcAddress, abi)
 
+  # hub and sig
+  accounts.load(11)
+  accounts.load(12)
+
+  owner = accounts[0]
+  hub = accounts[1]
+
   # deploy contract
   stakeValue = 2e6
   gasFee = 5
@@ -22,6 +29,10 @@ def deploy():
     gasFee,
     rewardFee,
     maxProfiles,
-    usdc.address, {'from': accounts[0]}
+    usdc.address,
+    hub,
+    owner,
+    {'from': accounts[0]}
   )
+
   return sf, usdc
