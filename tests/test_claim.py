@@ -111,7 +111,7 @@ def test_claim_balance_should_change_as_expected_if_claim_success(accounts, cont
 
   balanceBeforeClaim = currency.balanceOf(accounts[1])
   print('balance before claim', balanceBeforeClaim)
-  walletbalanceBeforeClaim = currency.balanceOf(accounts[9])
+  walletbalanceBeforeClaim = currency.balanceOf(stake2follow.address)
   print('wallet balance before: ', walletbalanceBeforeClaim)
   
   rewardPool = 2 * stakeValue
@@ -123,11 +123,11 @@ def test_claim_balance_should_change_as_expected_if_claim_success(accounts, cont
   print(t.info())
 
   balanceAftereClaim = currency.balanceOf(accounts[1])
-  walletbalanceAfterClaim = currency.balanceOf(accounts[9])
+  walletbalanceAfterClaim = currency.balanceOf(stake2follow.address)
   print('balance after claim: ', balanceAftereClaim)
   print('wallet balance after claim: ', walletbalanceAfterClaim)
   assert balanceAftereClaim == balanceBeforeClaim + stakeValue + avgReward
-  assert walletbalanceAfterClaim == walletbalanceBeforeClaim + fee
+  assert walletbalanceAfterClaim == walletbalanceBeforeClaim - stakeValue - avgReward
 
 
 
@@ -168,7 +168,7 @@ def test_claim_all_profiles_claimable_balance_should_change_as_expected(accounts
   balanceBeforeClaim1 = currency.balanceOf(accounts[1])
   balanceBeforeClaim2 = currency.balanceOf(accounts[2])
   balanceBeforeClaim3 = currency.balanceOf(accounts[3])
-  walletbalanceBeforeClaim = currency.balanceOf(accounts[9])
+  walletbalanceBeforeClaim = currency.balanceOf(stake2follow.address)
   
   stake2follow.profileClaim(roundId, 0, 1, {'from': accounts[1]})
   stake2follow.profileClaim(roundId, 1, 2, {'from': accounts[2]})
@@ -177,12 +177,12 @@ def test_claim_all_profiles_claimable_balance_should_change_as_expected(accounts
   balanceAftereClaim1 = currency.balanceOf(accounts[1])
   balanceAftereClaim2 = currency.balanceOf(accounts[1])
   balanceAftereClaim3 = currency.balanceOf(accounts[1])
-  walletbalanceAfterClaim = currency.balanceOf(accounts[9])
+  walletbalanceAfterClaim = currency.balanceOf(stake2follow.address)
 
   assert balanceAftereClaim1 == balanceBeforeClaim1 + stakeValue
   assert balanceAftereClaim2 == balanceBeforeClaim2 + stakeValue
   assert balanceAftereClaim3 == balanceBeforeClaim3 + stakeValue
-  assert walletbalanceAfterClaim == walletbalanceBeforeClaim
+  assert walletbalanceAfterClaim == walletbalanceBeforeClaim - 3 * stakeValue
 
 def test_claim_no_profiles_claimable_balance_should_change_as_expected(accounts, contracts):
   stake2follow, currency = contracts

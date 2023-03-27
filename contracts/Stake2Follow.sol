@@ -183,11 +183,6 @@ contract stake2Follow {
         uint256 fee = (reward / 100) * rewardFee;
         uint256 claimValue = stakeValue + ((reward - fee) / qualifyNum);
 
-        // transfer fees
-        if (fee > 0) {
-            payCurrency(walletAddress, fee);
-        }
-
         // Transfer the fund to profile
         payCurrency(profileToAddress[profileId], claimValue);
         
