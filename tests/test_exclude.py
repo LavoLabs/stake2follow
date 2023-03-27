@@ -37,17 +37,17 @@ def test_exclude_at_freeze_time_success(accounts, contracts):
   stake2follow.profileExclude(roundId, 1, {'from': accounts[8]})
 
   # check bit is set
-  qualify, profiles = stake2follow.getRoundData(roundId)
+  qualify, profiles = stake2follow.getRoundData(roundId,  {'from': accounts[8]})
   assert (qualify >> 50) == 1
   assert len(profiles) == 3
 
   stake2follow.profileExclude(roundId, 0b100, {'from': accounts[8]})
-  qualify, profiles = stake2follow.getRoundData(roundId)
+  qualify, profiles = stake2follow.getRoundData(roundId, {'from': accounts[8]})
   assert (qualify >> 50) == 0b101
   assert len(profiles) == 3
 
   stake2follow.profileExclude(roundId, 0b111010, {'from': accounts[8]})
-  qualify, profiles = stake2follow.getRoundData(roundId)
+  qualify, profiles = stake2follow.getRoundData(roundId,  {'from': accounts[8]})
   assert (qualify >> 50) == 0b111
   assert len(profiles) == 3
 

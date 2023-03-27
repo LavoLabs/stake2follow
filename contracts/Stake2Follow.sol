@@ -278,11 +278,11 @@ contract stake2Follow {
         return (crrentRoundId, genesis + crrentRoundId * ROUND_GAP_LENGTH);
     }
 
-    function getRoundData(uint256 roundId) public view returns (uint256 qualify, uint256[] memory profiles) {
+    function getRoundData(uint256 roundId) public view onlyApp returns (uint256 qualify, uint256[] memory profiles) {
         return (roundToQualify[roundId], roundToProfiles[roundId]);
     }
 
-    function getProfileRounds(uint256 profileId) public view returns (uint256[] memory roundIds) {
+    function getProfileRounds(uint256 profileId) public view onlyApp returns (uint256[] memory roundIds) {
         return profileToRounds[profileId];
     }
 

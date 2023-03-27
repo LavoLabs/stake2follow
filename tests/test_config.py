@@ -68,7 +68,7 @@ def test_get_round_data(accounts, contracts):
 
     chain.sleep(roundFreezeDur)
     chain.mine(1)
-    qualify, profiles = stake2follow.getRoundData(roundId)
+    qualify, profiles = stake2follow.getRoundData(roundId, {'from': accounts[8]})
     assert qualify == 1
     assert len(profiles) == 1
 
@@ -95,5 +95,5 @@ def test_get_profile_rounds(accounts, contracts):
     roundId, roundStartTime = stake2follow.getCurrentRound()
     stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
 
-  rounds = stake2follow.getProfileRounds(1)
+  rounds = stake2follow.getProfileRounds(1, {'from': accounts[8]})
   assert len(rounds) == 10
