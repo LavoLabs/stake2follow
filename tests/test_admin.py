@@ -75,8 +75,20 @@ def test_set_get_max_profiles(accounts, contracts):
   with brownie.reverts():
     stake2follow.setMaxProfiles(59, {'from': accounts[0]})
 
+  with brownie.reverts():
+    # no less than @firstNFree
+    stake2follow.setMaxProfiles(stake2follow.getFirstNFree() - 1, {'from': accounts[0]})
+
   stake2follow.setMaxProfiles(5, {'from': accounts[0]})
   assert stake2follow.getMaxProfiles() == 5
+
+def test_set_get_first_n_free(accounts, contracts):
+  stake2follow, currency = contracts
+  with brownie.reverts():
+    stake2follow.setFirstNFree(stake2follow.getMaxProfiles() + 1, {'from': accounts[8]})
+
+  stake2follow.setFirstNFree(5, {'from': accounts[0]})
+  assert stake2follow.getFirstNFree() == 5
 
 def test_circuit_breaker(accounts, contracts):
   stake2follow, currency = contracts

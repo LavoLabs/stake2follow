@@ -99,7 +99,7 @@ def test_claim_balance_should_change_as_expected_if_claim_success(accounts, cont
   chain.mine(1)
 
   stake2follow.profileQualify(roundId, 1, {'from': accounts[8]})
-  roundData = stake2follow.getRoundData(roundId)
+  roundData = stake2follow.getRoundData(roundId, {'from': accounts[8]})
   print('round data: ', roundData)
 
   chain.sleep(roundFreezeDur)

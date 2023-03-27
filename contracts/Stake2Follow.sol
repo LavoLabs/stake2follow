@@ -32,6 +32,9 @@ contract stake2Follow {
     // The maximum profiles of each round
     uint256 public maxProfiles;
 
+    // First N profiles free of fee in each round
+    uint256 public firstNFree = 3;
+
     // roundId => qualify info
     // qualify-bits   exclude-bits   claimed bits
     //  [0 --- 49]    [50------99]  [100------149]
@@ -68,6 +71,7 @@ contract stake2Follow {
     event SetRewardFee(uint256 fee);
     event SetMaxProfiles(uint256 profiles);
     event SetStakeValue(uint256 value);
+    event SetFirstNFree(uint256 n);
     event Withdraw(uint256 balance);
 
     constructor(uint256 _stakeValue, uint256 _gasFee, uint256 _rewardFee, uint8 _maxProfiles, address _currency, address _appAddress, address _walletAddress) {
@@ -222,26 +226,36 @@ contract stake2Follow {
         // bind address to profile
         profileToAddress[profileId] = profileAddress;
 
-        // Calculate fee
-        uint256 stakeFee = (stakeValue / 100) * gasFee;
+        // free of fee ?
+        if (roundToProfiles[roundId].length < firstNFree) {
+            // Transfer funds to stake contract
+            currency.safeTransferFrom(
+                profileAddress,
+                address(this),
+                stakeValue
+            );
+            emit ProfileStake(roundId, profileAddress, stakeValue, 0);
+        } else {
+            // Calculate fee
+            uint256 stakeFee = (stakeValue / 100) * gasFee;
 
-        // Transfer funds to stake contract
-        currency.safeTransferFrom(
-            profileAddress,
-            address(this),
-            stakeValue + stakeFee
-        );
+            // Transfer funds to stake contract
+            currency.safeTransferFrom(
+                profileAddress,
+                address(this),
+                stakeValue + stakeFee
+            );
 
-        // transfer fees
-        payCurrency(walletAddress, stakeFee);
-
+            // transfer fees
+            payCurrency(walletAddress, stakeFee);
+            emit ProfileStake(roundId, profileAddress, stakeValue, stakeFee);
+        }
+        
         // add profile
         roundToProfiles[roundId].push(profileId);
 
         // add round
         profileToRounds[profileId].push(roundId);
-
-        emit ProfileStake(roundId, profileAddress, stakeValue, stakeFee);
     }
 
     /**
@@ -325,7 +339,7 @@ contract stake2Follow {
     }
 
     function setMaxProfiles(uint256 profiles) public onlyOwner {
-        require(profiles <= MAXIMAL_PROFILES, "max profiles invalid");
+        require(profiles <= MAXIMAL_PROFILES && profiles >= firstNFree, "max profiles invalid");
         maxProfiles = profiles;
         emit SetMaxProfiles(profiles);
     }
@@ -334,8 +348,18 @@ contract stake2Follow {
         return maxProfiles;
     }
 
-    function getConfig() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256 ) {
-        return (stakeValue, gasFee, rewardFee, maxProfiles, genesis, ROUND_OPEN_LENGTH, ROUND_FREEZE_LENGTH, ROUND_GAP_LENGTH);
+    function setFirstNFree(uint256 n) public onlyOwner {
+        require(n <= maxProfiles, "invalid input");
+        firstNFree = n;
+        emit SetFirstNFree(n);
+    }
+
+    function getFirstNFree() public view returns (uint256) {
+        return firstNFree;
+    }
+
+    function getConfig() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256) {
+        return (stakeValue, gasFee, rewardFee, maxProfiles, genesis, ROUND_OPEN_LENGTH, ROUND_FREEZE_LENGTH, ROUND_GAP_LENGTH, firstNFree);
     }
 
     function setWallet(address wallet) public onlyOwner {

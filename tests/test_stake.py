@@ -16,7 +16,8 @@ def test_stake_at_round_open_success(accounts, contracts):
   walletBalanceBefore = currency.balanceOf(accounts[9])
   print('balance: ', balanceBefore, walletBalanceBefore)
   stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
-  fee = math.floor(stakeValue * stakeFee / 100)
+  # first one is free
+  fee = 0 #math.floor(stakeValue * stakeFee / 100)
   cost = stakeValue + fee
   balanceAfter = currency.balanceOf(accounts[1])
   walletBalanceAfter = currency.balanceOf(accounts[9])
@@ -65,11 +66,15 @@ def test_stake_exceed_max_profiles_should_fail(accounts, contracts):
   maxProfiles = config[3]
   roundId, roundStartTime = stake2follow.getCurrentRound()
 
+  firstNFree = stake2follow.getFirstNFree()
   for i in range(maxProfiles):
     print('user : ', i, accounts[i + 1])
     balanceBefore = currency.balanceOf(accounts[i + 1])
     stake2follow.profileStake(roundId, i, accounts[i + 1], {'from': accounts[i + 1]})
-    cost = math.floor(stakeValue + stakeValue * stakeFee / 100)
+    fee = math.floor(stakeValue * stakeFee / 100)
+    if i < firstNFree:
+      fee = 0
+    cost = stakeValue + fee
     balanceAfter = currency.balanceOf(accounts[i + 1])
     assert balanceBefore == balanceAfter + cost
     time.sleep(1)
