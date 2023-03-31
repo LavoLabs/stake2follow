@@ -19,6 +19,18 @@ def stake(stake2follow, accounts):
 
   return roundId, config[5], config[6], config[7]
 
+def stake_one(stake2follow, accounts):
+  config = stake2follow.getConfig()
+  stakeValue = config[0]
+  stakeFee = config[1]
+
+  roundId, roundStartTime = stake2follow.getCurrentRound()
+
+  # 1 paticipants
+  stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
+
+  return roundId, config[5], config[6], config[7]
+
 def test_claim_at_open_time_should_fail(accounts, contracts):
   stake2follow, currency = contracts
   roundId, roundOpenDur, roundFreezeDur, roundGap = stake(stake2follow, accounts)
@@ -100,7 +112,7 @@ def test_claim_balance_should_change_as_expected_if_claim_success(accounts, cont
 
   stake2follow.profileQualify(roundId, 1, {'from': accounts[8]})
   roundData = stake2follow.getRoundData(roundId)
-  print('round data: ', roundData)
+  print('x round data: {0:b}'.format(roundData[0]))
 
   chain.sleep(roundFreezeDur)
 
@@ -207,3 +219,33 @@ def test_claim_no_profiles_claimable_balance_should_change_as_expected(accounts,
   afterValue = currency.balanceOf(stake2follow.address)
 
   assert afterValue == beforeValue + 3 * stakeValue 
+
+def test_claim_only_one_profile_paticipant(accounts, contracts):
+  stake2follow, currency = contracts
+
+  beforeValue = currency.balanceOf(accounts[9])
+  beforeValueProfile = currency.balanceOf(accounts[1])
+
+  roundId, roundOpenDur, roundFreezeDur, roundGap = stake_one(stake2follow, accounts)
+
+  chain.sleep(roundOpenDur)
+  chain.mine(1)
+
+  stake2follow.profileQualify(roundId, 1, {'from': accounts[8]})
+  roundData = stake2follow.getRoundData(roundId)
+  print('x round data: {0:b}'.format(roundData[0]))
+
+  chain.sleep(roundFreezeDur)
+
+  config = stake2follow.getConfig()
+  stakeValue = config[0]
+  stakeFee = config[1]
+  rewardFee = config[2]
+
+  stake2follow.profileClaim(roundId, 0, 1, {'from': accounts[1]})
+
+  afterValue = currency.balanceOf(accounts[9])
+  afterValueProfile = currency.balanceOf(accounts[1])
+
+  assert afterValueProfile == beforeValueProfile - stakeValue * stakeFee / 100
+  assert beforeValue == afterValue - stakeValue * stakeFee / 100
