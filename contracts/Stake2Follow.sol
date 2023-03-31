@@ -110,15 +110,15 @@ contract stake2Follow {
         _;
     }
 
-    function isClaimable(uint256 roundId, uint256 profileIndex) internal returns (bool) {
+    function isClaimable(uint256 roundId, uint256 profileIndex) internal view returns (bool) {
         return (((roundToQualify[roundId] >> profileIndex) & 1) == 1);
     }
 
-    function isExcluded(uint256 roundId, uint256 profileIndex) internal returns (bool) {
+    function isExcluded(uint256 roundId, uint256 profileIndex) internal view returns (bool) {
         return (((roundToQualify[roundId] >> (profileIndex + 50)) & 1) == 1);
     }
 
-    function isClaimed(uint256 roundId, uint256 profileIndex) internal returns (bool) {
+    function isClaimed(uint256 roundId, uint256 profileIndex) internal view returns (bool) {
         return (((roundToQualify[roundId] >> (profileIndex + 100)) & 1) == 1);
     }
 
@@ -134,12 +134,12 @@ contract stake2Follow {
         roundToQualify[roundId] |= (1 << profileIndex);
     }
 
-    function isOpen(uint256 roundId) internal returns (bool) {
+    function isOpen(uint256 roundId) internal view returns (bool) {
         uint256 startTime = genesis + roundId * ROUND_GAP_LENGTH;
         return (block.timestamp > startTime && block.timestamp < (startTime + ROUND_OPEN_LENGTH));
     }
 
-    function isSettle(uint256 roundId) internal returns (bool) {
+    function isSettle(uint256 roundId) internal view returns (bool) {
         return (block.timestamp > (genesis + roundId * ROUND_GAP_LENGTH + ROUND_OPEN_LENGTH + ROUND_FREEZE_LENGTH));
     }
 
