@@ -21,9 +21,9 @@ def deploy():
 
   # deploy contract
   stakeValue = 2e6
-  gasFee = 5
-  rewardFee = 10
-  maxProfiles = 20
+  gasFee = 50
+  rewardFee = 100
+  maxProfiles = 5
   sf = stake2Follow.deploy(
     stakeValue,
     gasFee,
@@ -32,7 +32,8 @@ def deploy():
     usdc.address,
     hub,
     owner,
-    {'from': accounts[0]}
+    {'from': accounts[0]},
+    publish_source=True
   )
 
   return sf, usdc

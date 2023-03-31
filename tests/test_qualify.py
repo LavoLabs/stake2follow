@@ -6,6 +6,8 @@ import time
 import math
 
 def stake(stake2follow, accounts):
+  chain.sleep(3)
+  chain.mine(1)
   config = stake2follow.getConfig()
   stakeValue = config[0]
   stakeFee = config[1]
@@ -44,17 +46,17 @@ def test_qualify_at_freeze_time_success(accounts, contracts):
   stake2follow.profileQualify(roundId, 1, {'from': accounts[8]})
 
   # check bit is set
-  qualify, profiles = stake2follow.getRoundData(roundId)
+  qualify, profiles = stake2follow.getRoundData(roundId,  {'from': accounts[8]})
   assert qualify == 1
   assert len(profiles) == 3
 
   stake2follow.profileQualify(roundId, 0b100, {'from': accounts[8]})
-  qualify, profiles = stake2follow.getRoundData(roundId)
+  qualify, profiles = stake2follow.getRoundData(roundId,  {'from': accounts[8]})
   assert qualify == 0b101
   assert len(profiles) == 3
 
   stake2follow.profileQualify(roundId, 0b111010, {'from': accounts[8]})
-  qualify, profiles = stake2follow.getRoundData(roundId)
+  qualify, profiles = stake2follow.getRoundData(roundId,  {'from': accounts[8]})
   assert qualify == 0b111
   assert len(profiles) == 3
 

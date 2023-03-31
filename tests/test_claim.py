@@ -6,6 +6,8 @@ import time
 import math
 
 def stake(stake2follow, accounts):
+  chain.sleep(3)
+  chain.mine(1)
   config = stake2follow.getConfig()
   stakeValue = config[0]
   stakeFee = config[1]
@@ -20,6 +22,7 @@ def stake(stake2follow, accounts):
   return roundId, config[5], config[6], config[7]
 
 def stake_one(stake2follow, accounts):
+  chain.mine(1)
   config = stake2follow.getConfig()
   stakeValue = config[0]
   stakeFee = config[1]
@@ -111,8 +114,8 @@ def test_claim_balance_should_change_as_expected_if_claim_success(accounts, cont
   chain.mine(1)
 
   stake2follow.profileQualify(roundId, 1, {'from': accounts[8]})
-  roundData = stake2follow.getRoundData(roundId)
-  print('x round data: {0:b}'.format(roundData[0]))
+  roundData = stake2follow.getRoundData(roundId, {'from': accounts[8]})
+  print('round data: ', roundData)
 
   chain.sleep(roundFreezeDur)
 
@@ -123,11 +126,11 @@ def test_claim_balance_should_change_as_expected_if_claim_success(accounts, cont
 
   balanceBeforeClaim = currency.balanceOf(accounts[1])
   print('balance before claim', balanceBeforeClaim)
-  walletbalanceBeforeClaim = currency.balanceOf(accounts[9])
+  walletbalanceBeforeClaim = currency.balanceOf(stake2follow.address)
   print('wallet balance before: ', walletbalanceBeforeClaim)
   
   rewardPool = 2 * stakeValue
-  fee = rewardPool * rewardFee / 100
+  fee = rewardPool * rewardFee / 1000
   avgReward = (rewardPool - fee) / 1
   print('pool: ', rewardPool, 'fee: ', fee, 'avgReward: ', avgReward)
   
@@ -135,11 +138,11 @@ def test_claim_balance_should_change_as_expected_if_claim_success(accounts, cont
   print(t.info())
 
   balanceAftereClaim = currency.balanceOf(accounts[1])
-  walletbalanceAfterClaim = currency.balanceOf(accounts[9])
+  walletbalanceAfterClaim = currency.balanceOf(stake2follow.address)
   print('balance after claim: ', balanceAftereClaim)
   print('wallet balance after claim: ', walletbalanceAfterClaim)
   assert balanceAftereClaim == balanceBeforeClaim + stakeValue + avgReward
-  assert walletbalanceAfterClaim == walletbalanceBeforeClaim + fee
+  assert walletbalanceAfterClaim == walletbalanceBeforeClaim - stakeValue - avgReward
 
 
 
@@ -180,7 +183,7 @@ def test_claim_all_profiles_claimable_balance_should_change_as_expected(accounts
   balanceBeforeClaim1 = currency.balanceOf(accounts[1])
   balanceBeforeClaim2 = currency.balanceOf(accounts[2])
   balanceBeforeClaim3 = currency.balanceOf(accounts[3])
-  walletbalanceBeforeClaim = currency.balanceOf(accounts[9])
+  walletbalanceBeforeClaim = currency.balanceOf(stake2follow.address)
   
   stake2follow.profileClaim(roundId, 0, 1, {'from': accounts[1]})
   stake2follow.profileClaim(roundId, 1, 2, {'from': accounts[2]})
@@ -189,12 +192,12 @@ def test_claim_all_profiles_claimable_balance_should_change_as_expected(accounts
   balanceAftereClaim1 = currency.balanceOf(accounts[1])
   balanceAftereClaim2 = currency.balanceOf(accounts[1])
   balanceAftereClaim3 = currency.balanceOf(accounts[1])
-  walletbalanceAfterClaim = currency.balanceOf(accounts[9])
+  walletbalanceAfterClaim = currency.balanceOf(stake2follow.address)
 
   assert balanceAftereClaim1 == balanceBeforeClaim1 + stakeValue
   assert balanceAftereClaim2 == balanceBeforeClaim2 + stakeValue
   assert balanceAftereClaim3 == balanceBeforeClaim3 + stakeValue
-  assert walletbalanceAfterClaim == walletbalanceBeforeClaim
+  assert walletbalanceAfterClaim == walletbalanceBeforeClaim - 3 * stakeValue
 
 def test_claim_no_profiles_claimable_balance_should_change_as_expected(accounts, contracts):
   stake2follow, currency = contracts
@@ -222,6 +225,7 @@ def test_claim_no_profiles_claimable_balance_should_change_as_expected(accounts,
 
 def test_claim_only_one_profile_paticipant(accounts, contracts):
   stake2follow, currency = contracts
+  stake2follow.setFirstNFree(0)
 
   beforeValue = currency.balanceOf(accounts[9])
   beforeValueProfile = currency.balanceOf(accounts[1])
@@ -232,7 +236,7 @@ def test_claim_only_one_profile_paticipant(accounts, contracts):
   chain.mine(1)
 
   stake2follow.profileQualify(roundId, 1, {'from': accounts[8]})
-  roundData = stake2follow.getRoundData(roundId)
+  roundData = stake2follow.getRoundData(roundId, {'from': accounts[8]})
   print('x round data: {0:b}'.format(roundData[0]))
 
   chain.sleep(roundFreezeDur)
@@ -247,5 +251,5 @@ def test_claim_only_one_profile_paticipant(accounts, contracts):
   afterValue = currency.balanceOf(accounts[9])
   afterValueProfile = currency.balanceOf(accounts[1])
 
-  assert afterValueProfile == beforeValueProfile - stakeValue * stakeFee / 100
-  assert beforeValue == afterValue - stakeValue * stakeFee / 100
+  assert afterValueProfile == beforeValueProfile - stakeValue * stakeFee / 1000
+  assert beforeValue == afterValue - stakeValue * stakeFee / 1000

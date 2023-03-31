@@ -25,12 +25,15 @@ contract stake2Follow {
     uint256 genesis;
     // stake amount of each profile at each round
     uint256 public stakeValue;
-    // The fee of stake
+    // The fee of stake, n/1000
     uint256 public gasFee;
-    // The fee of reward
+    // The fee of reward, n/1000
     uint256 public rewardFee;
     // The maximum profiles of each round
     uint256 public maxProfiles;
+
+    // First N profiles free of fee in each round
+    uint256 public firstNFree = 3;
 
     // roundId => qualify info
     // qualify-bits   exclude-bits   claimed bits
@@ -68,6 +71,8 @@ contract stake2Follow {
     event SetRewardFee(uint256 fee);
     event SetMaxProfiles(uint256 profiles);
     event SetStakeValue(uint256 value);
+    event SetFirstNFree(uint256 n);
+    event WithdrawRoundFee(uint256 roundId, uint256 fee);
     event Withdraw(uint256 balance);
 
     constructor(uint256 _stakeValue, uint256 _gasFee, uint256 _rewardFee, uint8 _maxProfiles, address _currency, address _appAddress, address _walletAddress) {
@@ -176,13 +181,8 @@ contract stake2Follow {
 
         // adition fee to divide
         uint256 reward = stakeValue * (profileNum - qualifyNum);
-        uint256 fee = (reward / 100) * rewardFee;
+        uint256 fee = (reward / 1000) * rewardFee;
         uint256 claimValue = stakeValue + ((reward - fee) / qualifyNum);
-
-        // transfer fees
-        if (fee > 0) {
-            payCurrency(walletAddress, fee);
-        }
 
         // Transfer the fund to profile
         payCurrency(profileToAddress[profileId], claimValue);
@@ -222,26 +222,38 @@ contract stake2Follow {
         // bind address to profile
         profileToAddress[profileId] = profileAddress;
 
-        // Calculate fee
-        uint256 stakeFee = (stakeValue / 100) * gasFee;
+        // free of fee ?
+        if (roundToProfiles[roundId].length < firstNFree) {
+            // Transfer funds to stake contract
+            currency.safeTransferFrom(
+                profileAddress,
+                address(this),
+                stakeValue
+            );
+            emit ProfileStake(roundId, profileAddress, stakeValue, 0);
+        } else {
+            // Calculate fee
+            uint256 stakeFee = (stakeValue / 1000) * gasFee;
 
-        // Transfer funds to stake contract
-        currency.safeTransferFrom(
-            profileAddress,
-            address(this),
-            stakeValue + stakeFee
-        );
+            // Transfer funds to stake contract
+            currency.safeTransferFrom(
+                profileAddress,
+                address(this),
+                stakeValue + stakeFee
+            );
 
-        // transfer fees
-        payCurrency(walletAddress, stakeFee);
-
+            // transfer fees
+            if (stakeFee > 0) {
+                payCurrency(walletAddress, stakeFee);
+            }
+            emit ProfileStake(roundId, profileAddress, stakeValue, stakeFee);
+        }
+        
         // add profile
         roundToProfiles[roundId].push(profileId);
 
         // add round
         profileToRounds[profileId].push(roundId);
-
-        emit ProfileStake(roundId, profileAddress, stakeValue, stakeFee);
     }
 
     /**
@@ -296,7 +308,7 @@ contract stake2Follow {
     }
 
     function setGasFee(uint256 fee) public onlyOwner {
-        require(fee < 100, "Fee invalid");
+        require(fee < 1000, "Fee invalid");
         gasFee = fee;
         emit SetGasFee(fee);
     }
@@ -306,7 +318,7 @@ contract stake2Follow {
     }
 
     function setRewardFee(uint256 fee) public onlyOwner {
-        require(fee < 100, "Fee invalid");
+        require(fee < 1000, "Fee invalid");
         rewardFee = fee;
         emit SetRewardFee(fee);
     }
@@ -325,7 +337,7 @@ contract stake2Follow {
     }
 
     function setMaxProfiles(uint256 profiles) public onlyOwner {
-        require(profiles <= MAXIMAL_PROFILES, "max profiles invalid");
+        require(profiles <= MAXIMAL_PROFILES && profiles >= firstNFree, "max profiles invalid");
         maxProfiles = profiles;
         emit SetMaxProfiles(profiles);
     }
@@ -334,8 +346,18 @@ contract stake2Follow {
         return maxProfiles;
     }
 
-    function getConfig() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256 ) {
-        return (stakeValue, gasFee, rewardFee, maxProfiles, genesis, ROUND_OPEN_LENGTH, ROUND_FREEZE_LENGTH, ROUND_GAP_LENGTH);
+    function setFirstNFree(uint256 n) public onlyOwner {
+        require(n <= maxProfiles, "invalid input");
+        firstNFree = n;
+        emit SetFirstNFree(n);
+    }
+
+    function getFirstNFree() public view returns (uint256) {
+        return firstNFree;
+    }
+
+    function getConfig() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256) {
+        return (stakeValue, gasFee, rewardFee, maxProfiles, genesis, ROUND_OPEN_LENGTH, ROUND_FREEZE_LENGTH, ROUND_GAP_LENGTH, firstNFree);
     }
 
     function setWallet(address wallet) public onlyOwner {
@@ -350,6 +372,30 @@ contract stake2Follow {
     function circuitBreaker() public onlyOwner {
         stopped = !stopped;
         emit CircuitBreak(stopped);
+    }
+
+    function withdrawRoundFee(uint256 roundId) public onlyOwner {
+        // ensure round is settle
+        require(isSettle(roundId), "Round is not settle");
+
+        // calculate reward && pay
+        uint256 profileNum = roundToProfiles[roundId].length;
+        uint256 qualifyNum = 0;
+        for (uint256 i = 0; i < profileNum; i++) {
+            if (isClaimable(roundId, i) && !isExcluded(roundId, i)) {
+                qualifyNum += 1;
+            }
+        }
+
+        uint256 reward = stakeValue * (profileNum - qualifyNum);
+        uint256 fee = (reward / 1000) * rewardFee;
+
+        // Transfer the fund to profile
+        if (fee > 0) {
+            payCurrency(walletAddress, fee);
+        }
+        
+        emit WithdrawRoundFee(roundId, fee);
     }
 
     function withdraw() public onlyInEmergency onlyOwner {

@@ -20,8 +20,8 @@ def contracts(stake2Follow, accounts):
 
   # deploy contract
   stakeValue = 1000
-  gasFee = 5
-  rewardFee = 10
+  gasFee = 50
+  rewardFee = 100
   maxProfiles = 5
   sf = stake2Follow.deploy(
     stakeValue,
