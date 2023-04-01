@@ -93,3 +93,10 @@ ae58ff18f48099edd126cb559ca0022264f34f732a1021bf59b6618ab4206ffa
 ```
 from scripts.deploy_contract import *
 ```
+
+
+### public source
+
+```
+stake2Follow.get_verification_info()['standard_json_input']
+```
