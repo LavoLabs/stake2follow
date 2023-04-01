@@ -1,7 +1,7 @@
 # Stake2Follow
 
 
-## 依赖
+## Requirements 
 ### node@v19.7.0
 
 ### ganache-cli@v6.12.2
@@ -39,19 +39,19 @@ brownie pm install OpenZeppelin/openzeppelin-contracts@4.5.0
 pipx inject eth-brownie brownie-token-tester
 ```
 
-## 编译
+## Compile
 
 ```bash
 brownie compile
 ```
 
-## 单元测试
+## Unitest
 
 ```bash
 brownie test
 ```
 
-## 执行脚本
+## Run test
 
 ```bash
 brownie run scenario_test
