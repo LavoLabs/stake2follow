@@ -1,5 +1,7 @@
 # Stake2Follow
 
+This is the contract codes for Stake2Follow dApp of [Lens Protocol](https://www.lens.xyz/)
+
 
 ## Requirements 
 ### node@v19.7.0
