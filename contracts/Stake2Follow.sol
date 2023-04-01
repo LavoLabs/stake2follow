@@ -53,7 +53,7 @@ contract stake2Follow {
 
     uint256 public constant ROUND_OPEN_LENGTH = 3 hours;
     uint256 public constant ROUND_FREEZE_LENGTH = 50 minutes;
-    uint256 public constant ROUND_GAP_LENGTH = 10 minutes;
+    uint256 public constant ROUND_GAP_LENGTH = 4 hours;
 
     // Events
     event ProfileStake(uint256 roundId, address profileAddress, uint256 stake, uint256 fees);
