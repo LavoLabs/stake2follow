@@ -6,6 +6,8 @@ import "OpenZeppelin/openzeppelin-contracts@4.5.0/contracts/token/ERC20/utils/Sa
 import "OpenZeppelin/openzeppelin-contracts@4.5.0/contracts/token/ERC20/IERC20.sol";
 import "OpenZeppelin/openzeppelin-contracts@4.5.0/contracts/token/ERC721/IERC721.sol";
 
+import "../interfaces/ILensHub.sol";
+
 /**
  * @title Stake2Follow
  * @author atlasxu
@@ -20,6 +22,8 @@ contract stake2Follow {
     address public appAddress;
     bool private stopped = false;
     IERC20 public currency;
+
+    ILensHub public lensHub;
 
     // contract deployed time
     uint256 genesis;
@@ -57,7 +61,7 @@ contract stake2Follow {
 
     // Events
     event ProfileStake(uint256 roundId, address profileAddress, uint256 stake, uint256 fees);
-    event ProfileQualify(uint256 roundId, uint256 qualify);
+    event ProfileQualify(uint256 roundId, uint256 profileId);
     event ProfileExclude(uint256 roundId, uint256 exclude);
     event ProfileClaim(uint256 roundId, uint256 profileId, uint256 fund);
     event AppSet(address app, address sender);
@@ -71,8 +75,9 @@ contract stake2Follow {
     event WithdrawRoundFee(uint256 roundId, uint256 fee);
     event Withdraw(uint256 balance);
 
-    constructor(uint256 _stakeValue, uint256 _gasFee, uint256 _rewardFee, uint8 _maxProfiles, address _currency, address _appAddress, address _walletAddress) {
+    constructor(uint256 _stakeValue, uint256 _gasFee, uint256 _rewardFee, uint8 _maxProfiles, address _currency, address _appAddress, address _walletAddress, address _lenHubAddress) {
         currency = IERC20(_currency);
+        lensHub = ILensHub(_lenHubAddress);
 
         gasFee = _gasFee;
         rewardFee = _rewardFee;
@@ -255,15 +260,47 @@ contract stake2Follow {
     /**
      * @dev qualify profile
      */
-    function profileQualify(uint256 roundId, uint256 qualify) external stopInEmergency onlyApp {
+    function profileQualify(uint256 roundId, uint256 profileId, address profileAddress) external stopInEmergency {
         require(!isOpen(roundId), "Round is open");
-        // ensure round is not settle
         require(!isSettle(roundId), "Round is settle");
-        require(qualify > 0, "qualify should not be zero");
-        require(roundToProfiles[roundId].length > 0, "profiles is empty");
-        // set last #profiles bits
-        roundToQualify[roundId] |= (((1 << roundToProfiles[roundId].length) - 1) & qualify);
-        emit ProfileQualify(roundId, qualify);
+        require(lensHub.getFollowModule(profileId) == address(0), 'Follow module set!');
+
+        bool alreadyIn = false;
+        uint256 profileIdx = 0;
+        for (uint32 i = 0; i < roundToProfiles[roundId].length; i += 1) {
+            if (roundToProfiles[roundId][i] ==  profileId) {
+                profileIdx = i;
+                alreadyIn = true;
+                break;
+            }
+        }
+        require(alreadyIn, "profile not paticipant");
+
+        bool followAll = true;
+        for (uint32 i = 0; i < roundToProfiles[roundId].length; i += 1) {
+            if (roundToProfiles[roundId][i] !=  profileId) {
+                // query lenshub
+                address nftAddress = lensHub.getFollowNFT(roundToProfiles[roundId][i]);
+                IERC721 followNFT = IERC721(nftAddress);
+
+                // check follow module
+                if (lensHub.getFollowModule(roundToProfiles[roundId][i]) != address(0)) {
+                    setExcluded(roundId, i);
+                    continue;
+                }
+
+                // check follow or not
+                if (followNFT.balanceOf(profileAddress) == 0) {
+                    followAll = false;
+                    break;
+                }
+            }
+        }
+        require(followAll, "follow mission not completed!");
+
+        // set bit
+        setClaimable(roundId, profileIdx);
+        emit ProfileQualify(roundId, profileId);
     }
 
     /**
