@@ -6,6 +6,7 @@ import json
 
 def deploy():
 
+  lensHubAddress = '0x60Ae865ee4C725cd04353b5AAb364553f56ceF82'
   usdcAddress = '0xE097d6B3100777DC31B34dC2c58fB524C2e76921'
   f = open('./scripts/usdc-imp-abi.json')
   binary = json.load(f)
@@ -32,8 +33,8 @@ def deploy():
     usdc.address,
     hub,
     owner,
+    lensHubAddress,
     {'from': accounts[0]},
-    publish_source=True
   )
 
   return sf, usdc

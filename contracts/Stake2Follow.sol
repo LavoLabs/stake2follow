@@ -55,14 +55,18 @@ contract stake2Follow {
 
     uint256 public constant MAXIMAL_PROFILES = 50;
 
-    uint256 public constant ROUND_OPEN_LENGTH = 3 hours;
-    uint256 public constant ROUND_FREEZE_LENGTH = 50 minutes;
-    uint256 public constant ROUND_GAP_LENGTH = 4 hours;
+    // uint256 public constant ROUND_OPEN_LENGTH = 3 hours;
+    // uint256 public constant ROUND_FREEZE_LENGTH = 50 minutes;
+    // uint256 public constant ROUND_GAP_LENGTH = 4 hours;
+
+    uint256 public constant ROUND_OPEN_LENGTH = 15 minutes;
+    uint256 public constant ROUND_FREEZE_LENGTH = 5 minutes;
+    uint256 public constant ROUND_GAP_LENGTH = 20 minutes;
 
     // Events
     event ProfileStake(uint256 roundId, address profileAddress, uint256 stake, uint256 fees);
     event ProfileQualify(uint256 roundId, uint256 profileId);
-    event ProfileExclude(uint256 roundId, uint256 exclude);
+    event ProfileExclude(uint256 roundId, uint256 profileId);
     event ProfileClaim(uint256 roundId, uint256 profileId, uint256 fund);
     event AppSet(address app, address sender);
     event WalletSet(address wallet, address sender);
@@ -170,15 +174,30 @@ contract stake2Follow {
         // Check the profile has not claimed
         require(!isClaimed(roundId, profileIndex), "Profile already claimed");
 
+        
         // calculate reward && pay
 
+        bool followAll = true;
         uint256 profileNum = roundToProfiles[roundId].length;
         uint256 qualifyNum = 0;
         for (uint256 i = 0; i < profileNum; i++) {
             if (isClaimable(roundId, i) && !isExcluded(roundId, i)) {
                 qualifyNum += 1;
             }
+            // check still follows
+            if (profileId != roundToProfiles[roundId][i] && !isExcluded(roundId, i)) {
+                // query lenshub
+                address nftAddress = lensHub.getFollowNFT(roundToProfiles[roundId][i]);
+                IERC721 followNFT = IERC721(nftAddress);
+
+                // check follow or not
+                if (followNFT.balanceOf(profileToAddress[profileId]) == 0) {
+                    followAll = false;
+                    break;
+                }
+            }
         }
+        require(followAll, "follow check fail");
 
         // adition fee to divide
         uint256 reward = stakeValue * (profileNum - qualifyNum);
@@ -279,6 +298,10 @@ contract stake2Follow {
         bool followAll = true;
         for (uint32 i = 0; i < roundToProfiles[roundId].length; i += 1) {
             if (roundToProfiles[roundId][i] !=  profileId) {
+                if (isExcluded(roundId, roundToProfiles[roundId][i])) {
+                    continue;
+                }
+
                 // query lenshub
                 address nftAddress = lensHub.getFollowNFT(roundToProfiles[roundId][i]);
                 IERC721 followNFT = IERC721(nftAddress);
@@ -306,16 +329,27 @@ contract stake2Follow {
     /**
      * @dev exclude profiles which is illegal
      * @param roundId current round id
-     * @param illegals Bit array to indicate profile qualification of claim
+     * @param profileId id of profile to exclude
      */
-    function profileExclude(uint256 roundId, uint256 illegals) external stopInEmergency onlyApp {
-        // round not settle
+    function profileExclude(uint256 roundId, uint256 profileId) external stopInEmergency onlyApp {
         require(!isSettle(roundId), "Round is settle");
-        require(illegals > 0, "qualify should not be zero");
         require(roundToProfiles[roundId].length > 0, "profiles is empty");
 
-        roundToQualify[roundId] |= ((((1 << roundToProfiles[roundId].length) - 1) & illegals) << 50);
-        emit ProfileExclude(roundId, illegals);
+        bool alreadyIn = false;
+        uint256 profileIdx = 0;
+        for (uint32 i = 0; i < roundToProfiles[roundId].length; i += 1) {
+            if (roundToProfiles[roundId][i] ==  profileId) {
+                profileIdx = i;
+                alreadyIn = true;
+                break;
+            }
+        }
+        require(alreadyIn, "profile not paticipant");
+
+        require(lensHub.getFollowModule(profileId) == address(0), 'Follow module is not set!');
+
+        setExcluded(roundId, profileIdx);
+        emit ProfileExclude(roundId, profileId);
     }
 
     function getCurrentRound() public view returns (uint256 roundId, uint256 startTime) {
