@@ -33,7 +33,7 @@ contract stake2Follow {
     uint256 public maxProfiles;
 
     // First N profiles free of fee in each round
-    uint256 public firstNFree = 3;
+    uint256 public firstNFree = 0;
 
     // roundId => qualify info
     // qualify-bits   exclude-bits   claimed bits
@@ -54,13 +54,9 @@ contract stake2Follow {
 
     uint256 public constant MAXIMAL_PROFILES = 50;
 
-    // uint256 public constant ROUND_OPEN_LENGTH = 60 minutes;
-    // uint256 public constant ROUND_FREEZE_LENGTH = 30 minutes;
-    // uint256 public constant ROUND_GAP_LENGTH = 120 minutes;
-
-    uint256 public constant ROUND_OPEN_LENGTH = 10 minutes;
-    uint256 public constant ROUND_FREEZE_LENGTH = 3 minutes;
-    uint256 public constant ROUND_GAP_LENGTH = 15 minutes;
+    uint256 public constant ROUND_OPEN_LENGTH = 3 hours;
+    uint256 public constant ROUND_FREEZE_LENGTH = 50 minutes;
+    uint256 public constant ROUND_GAP_LENGTH = 4 hours;
 
     // Events
     event ProfileStake(uint256 roundId, address profileAddress, uint256 stake, uint256 fees);

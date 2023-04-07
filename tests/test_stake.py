@@ -17,7 +17,7 @@ def test_stake_at_round_open_success(accounts, contracts):
   print('balance: ', balanceBefore, walletBalanceBefore)
   stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
   # first one is free
-  fee = 0 #math.floor(stakeValue * stakeFee / 10)0)
+  fee = math.floor(stakeValue * stakeFee / 1000)
   cost = stakeValue + fee
   balanceAfter = currency.balanceOf(accounts[1])
   walletBalanceAfter = currency.balanceOf(accounts[9])
