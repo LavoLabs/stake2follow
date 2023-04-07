@@ -114,10 +114,20 @@ contract stake2Follow {
     }
 
     function isClaimable(uint256 roundId, uint256 profileIndex) internal view returns (bool) {
+       if (roundToProfiles[roundId].length == 1 && profileIndex == 0) {
+            // only one person scenario
+            return true;
+        } 
+
         return (((roundToQualify[roundId] >> profileIndex) & 1) == 1);
     }
 
     function isExcluded(uint256 roundId, uint256 profileIndex) internal view returns (bool) {
+        if (roundToProfiles[roundId].length == 1 && profileIndex == 0) {
+            // only one person scenario
+            return false;
+        }
+
         return (((roundToQualify[roundId] >> (profileIndex + 50)) & 1) == 1);
     }
 
