@@ -100,7 +100,7 @@ def test_circuit_breaker(accounts, contracts):
 
   roundId, roundStartTime = stake2follow.getCurrentRound()
   with brownie.reverts():
-    stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
+    stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
 
 
 def test_withdraw_round(accounts, contracts):
@@ -117,11 +117,11 @@ def test_withdraw_round(accounts, contracts):
   beforeBalance = currency.balanceOf(accounts[9])
   roundId, roundStartTime = stake2follow.getCurrentRound()
   chain.mine(1)
-  stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
-  stake2follow.profileStake(roundId, 2, accounts[2], {'from': accounts[2]})
-  stake2follow.profileStake(roundId, 3, accounts[3], {'from': accounts[3]})
-  stake2follow.profileStake(roundId, 4, accounts[4], {'from': accounts[4]})
-  stake2follow.profileStake(roundId, 5, accounts[5], {'from': accounts[5]})
+  stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
+  stake2follow.profileStake(roundId, 2, accounts[2], 0, {'from': accounts[2]})
+  stake2follow.profileStake(roundId, 3, accounts[3], 0, {'from': accounts[3]})
+  stake2follow.profileStake(roundId, 4, accounts[4], 0, {'from': accounts[4]})
+  stake2follow.profileStake(roundId, 5, accounts[5], 0, {'from': accounts[5]})
   middleBalance = currency.balanceOf(accounts[9])
 
   gasFee = 5 * stakeValue / 1000 * stakeFee
@@ -152,7 +152,7 @@ def test_withdraw(accounts, contracts):
   beforeBalance = currency.balanceOf(accounts[0])
 
   roundId, roundStartTime = stake2follow.getCurrentRound()
-  stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
+  stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
 
   contractBalance = currency.balanceOf(stake2follow.address)
   print('contract balance: ', contractBalance)

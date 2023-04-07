@@ -15,9 +15,9 @@ def stake(stake2follow, accounts):
   roundId, roundStartTime = stake2follow.getCurrentRound()
 
   # 3 paticipants
-  stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
-  stake2follow.profileStake(roundId, 2, accounts[2], {'from': accounts[2]})
-  stake2follow.profileStake(roundId, 3, accounts[3], {'from': accounts[3]})
+  stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
+  stake2follow.profileStake(roundId, 2, accounts[2], 0, {'from': accounts[2]})
+  stake2follow.profileStake(roundId, 3, accounts[3], 0, {'from': accounts[3]})
 
   return roundId, config[5], config[6], config[7]
 

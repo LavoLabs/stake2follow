@@ -15,7 +15,7 @@ def test_stake_at_round_open_success(accounts, contracts):
   balanceBefore = currency.balanceOf(accounts[1])
   walletBalanceBefore = currency.balanceOf(accounts[9])
   print('balance: ', balanceBefore, walletBalanceBefore)
-  stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
+  stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
   # first one is free
   fee = 0 #math.floor(stakeValue * stakeFee / 10)0)
   cost = stakeValue + fee
@@ -30,13 +30,13 @@ def test_stake_not_owner_should_fail(accounts, contracts):
   stake2follow, currency = contracts
   with brownie.reverts():
     roundId, roundStartTime = stake2follow.getCurrentRound()
-    stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[2]})
+    stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[2]})
 
 def test_stake_future_roundid_should_fail(accounts, contracts):
   stake2follow, currency = contracts
   with brownie.reverts():
-    stake2follow.profileStake(1, 1, accounts[1], {'from': accounts[1]})
-    stake2follow.profileStake(100, 1, accounts[1], {'from': accounts[1]})
+    stake2follow.profileStake(1, 1, accounts[1], 0, {'from': accounts[1]})
+    stake2follow.profileStake(100, 1, accounts[1], 0, {'from': accounts[1]})
 
 def test_stake_not_at_open_should_fail(accounts, contracts):
   stake2follow, currency = contracts
@@ -50,13 +50,13 @@ def test_stake_not_at_open_should_fail(accounts, contracts):
   chain.sleep(roundOpenDur)
   chain.mine(1)
   with brownie.reverts():
-    stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
+    stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
 
   # settle stage
   chain.sleep(roundFreezeDur)
   chain.mine(1)
   with brownie.reverts():
-    stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
+    stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
 
 def test_stake_exceed_max_profiles_should_fail(accounts, contracts):
   stake2follow, currency = contracts
@@ -70,7 +70,7 @@ def test_stake_exceed_max_profiles_should_fail(accounts, contracts):
   for i in range(maxProfiles):
     print('user : ', i, accounts[i + 1])
     balanceBefore = currency.balanceOf(accounts[i + 1])
-    stake2follow.profileStake(roundId, i, accounts[i + 1], {'from': accounts[i + 1]})
+    stake2follow.profileStake(roundId, i, accounts[i + 1], 0, {'from': accounts[i + 1]})
     fee = math.floor(stakeValue * stakeFee / 1000)
     if i < firstNFree:
       fee = 0
@@ -80,12 +80,29 @@ def test_stake_exceed_max_profiles_should_fail(accounts, contracts):
     time.sleep(1)
 
   with brownie.reverts():
-    stake2follow.profileStake(roundId, maxProfiles+1, accounts[maxProfiles + 1], {'from': accounts[maxProfiles + 1]})
+    stake2follow.profileStake(roundId, maxProfiles+1, accounts[maxProfiles + 1], 0, {'from': accounts[maxProfiles + 1]})
 
 def test_stake_twice_should_fail(accounts, contracts):
   stake2follow, currency = contracts
   config = stake2follow.getConfig()
   roundId, roundStartTime = stake2follow.getCurrentRound()
-  stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
+  stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
   with brownie.reverts():
-    stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
+    stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
+
+def test_stake_with_invites(accounts, contracts):
+  stake2follow, currency = contracts
+  config = stake2follow.getConfig()
+  roundId, roundStartTime = stake2follow.getCurrentRound()
+
+  stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
+  assert stake2follow.getProfileInvites(roundId, 1) == 0
+  stake2follow.profileStake(roundId, 2, accounts[2], 1, {'from': accounts[2]})
+  assert stake2follow.getProfileInvites(roundId, 1) == 1
+  stake2follow.profileStake(roundId, 3, accounts[3], 2, {'from': accounts[3]})
+  assert stake2follow.getProfileInvites(roundId, 2) == 1
+
+  assert stake2follow.getProfileInvites(roundId, 3) == 0
+
+
+

@@ -49,6 +49,9 @@ contract stake2Follow {
     // profileId -> address
     mapping(uint256 => address) profileToAddress;
 
+    // share reward weight = 1 + profilesInvited
+    mapping(uint256 => mapping(uint256 => uint256)) inviteBonus;
+
     uint256 public constant MAXIMAL_PROFILES = 50;
 
     // uint256 public constant ROUND_OPEN_LENGTH = 60 minutes;
@@ -173,16 +176,18 @@ contract stake2Follow {
 
         uint256 profileNum = roundToProfiles[roundId].length;
         uint256 qualifyNum = 0;
+        uint256 shares = 0;
         for (uint256 i = 0; i < profileNum; i++) {
             if (isClaimable(roundId, i) && !isExcluded(roundId, i)) {
                 qualifyNum += 1;
+                shares += inviteBonus[roundId][roundToProfiles[roundId][i]];
             }
         }
 
         // adition fee to divide
         uint256 reward = stakeValue * (profileNum - qualifyNum);
         uint256 fee = (reward / 1000) * rewardFee;
-        uint256 claimValue = stakeValue + ((reward - fee) / qualifyNum);
+        uint256 claimValue = stakeValue + ((reward - fee) / shares) * inviteBonus[roundId][profileId];
 
         // Transfer the fund to profile
         payCurrency(profileToAddress[profileId], claimValue);
@@ -198,8 +203,9 @@ contract stake2Follow {
      * @param roundId the round id.
      * @param profileId The ID of len profile.
      * @param profileAddress The address of the profile that staking.
+     * @param refId The id that invite this profile
      */
-    function profileStake(uint256 roundId, uint256 profileId, address profileAddress) external stopInEmergency {
+    function profileStake(uint256 roundId, uint256 profileId, address profileAddress, uint256 refId) external stopInEmergency {
         // Check if the msg.sender is the profile owner
         require(msg.sender == profileAddress, "Sender is not the profile owner");
         // Check if the profile address is valid
@@ -254,6 +260,12 @@ contract stake2Follow {
 
         // add round
         profileToRounds[profileId].push(roundId);
+
+        // set invite bonus
+        inviteBonus[roundId][profileId] = 1;
+        if (inviteBonus[roundId][refId] >= 1) {
+            inviteBonus[roundId][refId] += 1;
+        }
     }
 
     /**
@@ -296,6 +308,10 @@ contract stake2Follow {
 
     function getProfileRounds(uint256 profileId) public view returns (uint256[] memory roundIds) {
         return profileToRounds[profileId];
+    }
+
+    function  getProfileInvites(uint256 roundId, uint256 profileId) public view returns (uint256 invites) {
+        return inviteBonus[roundId][profileId] - 1;
     }
 
     function setApp(address _appAddress) public onlyOwner {
