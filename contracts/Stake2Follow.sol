@@ -57,12 +57,15 @@ contract stake2Follow {
 
     uint256 public constant MAXIMAL_PROFILES = 50;
 
-    uint256 public constant ROUND_OPEN_LENGTH = 3 hours;
-    uint256 public constant ROUND_FREEZE_LENGTH = 50 minutes;
-    uint256 public constant ROUND_GAP_LENGTH = 4 hours;
+    // uint256 public constant ROUND_OPEN_LENGTH = 3 hours;
+    // uint256 public constant ROUND_FREEZE_LENGTH = 50 minutes;
+    // uint256 public constant ROUND_GAP_LENGTH = 4 hours;
+    uint256 public constant ROUND_OPEN_LENGTH = 10 minutes;
+    uint256 public constant ROUND_FREEZE_LENGTH = 5 minutes;
+    uint256 public constant ROUND_GAP_LENGTH = 18 minutes;
 
     // Events
-    event ProfileStake(uint256 roundId, address profileAddress, uint256 stake, uint256 fees);
+    event ProfileStake(uint256 roundId, address profileAddress, uint256 stake, uint256 fees, uint256 refId);
     event ProfileQualify(uint256 roundId, uint256 qualify);
     event ProfileExclude(uint256 roundId, uint256 exclude);
     event ProfileClaim(uint256 roundId, uint256 profileId, uint256 fund);
@@ -235,7 +238,7 @@ contract stake2Follow {
         require(isOpen(roundId), "Round is not in open stage");
         // Check profile count
         require(roundToProfiles[roundId].length < maxProfiles, "Maximum profile limit reached");
-        // TODO: check not staked before
+        // check not staked before
         // total profiles is small, so this loop is ok
         bool alreadyIn = false;
         for (uint32 i = 0; i < roundToProfiles[roundId].length; i += 1) {
@@ -257,7 +260,7 @@ contract stake2Follow {
                 address(this),
                 stakeValue
             );
-            emit ProfileStake(roundId, profileAddress, stakeValue, 0);
+            emit ProfileStake(roundId, profileAddress, stakeValue, 0, refId);
         } else {
             // Calculate fee
             uint256 stakeFee = (stakeValue / 1000) * gasFee;
@@ -273,7 +276,7 @@ contract stake2Follow {
             if (stakeFee > 0) {
                 payCurrency(walletAddress, stakeFee);
             }
-            emit ProfileStake(roundId, profileAddress, stakeValue, stakeFee);
+            emit ProfileStake(roundId, profileAddress, stakeValue, stakeFee, refId);
         }
         
         // add profile
@@ -397,7 +400,7 @@ contract stake2Follow {
         emit SetInviteFee(fee);
     }
 
-    function getInviteFee(uint256 fee) public view returns (uint256) {
+    function getInviteFee() public view returns (uint256) {
         return inviteFee;
     }
 
