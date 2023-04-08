@@ -49,8 +49,11 @@ contract stake2Follow {
     // profileId -> address
     mapping(uint256 => address) profileToAddress;
 
-    // share reward weight = 1 + profilesInvited
+    // share reward weight = profilesInvited
     mapping(uint256 => mapping(uint256 => uint256)) inviteBonus;
+
+    // portation that shares to profiles invites people in. n/1000
+    uint256 public inviteFee = 200;
 
     uint256 public constant MAXIMAL_PROFILES = 50;
 
@@ -71,6 +74,7 @@ contract stake2Follow {
     event SetMaxProfiles(uint256 profiles);
     event SetStakeValue(uint256 value);
     event SetFirstNFree(uint256 n);
+    event SetInviteFee(uint256 n);
     event WithdrawRoundFee(uint256 roundId, uint256 fee);
     event Withdraw(uint256 balance);
 
@@ -192,8 +196,19 @@ contract stake2Follow {
 
         // adition fee to divide
         uint256 reward = stakeValue * (profileNum - qualifyNum);
-        uint256 fee = (reward / 1000) * rewardFee;
-        uint256 claimValue = stakeValue + ((reward - fee) / shares) * inviteBonus[roundId][profileId];
+        uint256 platformReward = reward * rewardFee / 1000;
+        uint256 inviteReward = 0;
+        if (shares > 0) {
+            // someone invited people in, create the inviteReward pool
+            inviteReward = reward * inviteFee / 1000;
+        }
+        // claim value contains staked amount and not-finished-profile's staked amount divided equally excludes inviteBonus portation
+        uint256 claimValue = stakeValue + ((reward - platformReward - inviteReward) / qualifyNum);
+
+        if (shares > 0 && inviteBonus[roundId][profileId] > 0) {
+            // this profile invited people in, add invite reward
+            claimValue = claimValue + inviteReward * inviteBonus[roundId][profileId] / shares;
+        }
 
         // Transfer the fund to profile
         payCurrency(profileToAddress[profileId], claimValue);
@@ -268,10 +283,7 @@ contract stake2Follow {
         profileToRounds[profileId].push(roundId);
 
         // set invite bonus
-        inviteBonus[roundId][profileId] = 1;
-        if (inviteBonus[roundId][refId] >= 1) {
-            inviteBonus[roundId][refId] += 1;
-        }
+        inviteBonus[roundId][refId] += 1;
     }
 
     /**
@@ -317,7 +329,7 @@ contract stake2Follow {
     }
 
     function  getProfileInvites(uint256 roundId, uint256 profileId) public view returns (uint256 invites) {
-        return inviteBonus[roundId][profileId] - 1;
+        return inviteBonus[roundId][profileId];
     }
 
     function setApp(address _appAddress) public onlyOwner {
@@ -378,8 +390,19 @@ contract stake2Follow {
         return firstNFree;
     }
 
-    function getConfig() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256) {
-        return (stakeValue, gasFee, rewardFee, maxProfiles, genesis, ROUND_OPEN_LENGTH, ROUND_FREEZE_LENGTH, ROUND_GAP_LENGTH, firstNFree);
+    function setInviteFee(uint256 fee) public onlyOwner {
+        require(fee < 1000, "Fee invalid");
+        require(fee + rewardFee < 1000, "Fee invalid");
+        inviteFee = fee;
+        emit SetInviteFee(fee);
+    }
+
+    function getInviteFee(uint256 fee) public view returns (uint256) {
+        return inviteFee;
+    }
+
+    function getConfig() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256) {
+        return (stakeValue, gasFee, rewardFee, maxProfiles, genesis, ROUND_OPEN_LENGTH, ROUND_FREEZE_LENGTH, ROUND_GAP_LENGTH, firstNFree, inviteFee);
     }
 
     function setWallet(address wallet) public onlyOwner {

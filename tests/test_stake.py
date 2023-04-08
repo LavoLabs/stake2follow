@@ -103,6 +103,3 @@ def test_stake_with_invites(accounts, contracts):
   assert stake2follow.getProfileInvites(roundId, 2) == 1
 
   assert stake2follow.getProfileInvites(roundId, 3) == 0
-
-
-
