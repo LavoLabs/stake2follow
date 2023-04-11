@@ -58,3 +58,9 @@ brownie test
 ```bash
 brownie run scenario_test
 ```
+
+## Verify contract
+
+```
+npx hardhat verify --network polygon_mumbai address
+```

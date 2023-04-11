@@ -2,9 +2,10 @@
 
 pragma solidity 0.8.17;
 
-import "OpenZeppelin/openzeppelin-contracts@4.5.0/contracts/token/ERC20/utils/SafeERC20.sol";
-import "OpenZeppelin/openzeppelin-contracts@4.5.0/contracts/token/ERC20/IERC20.sol";
-import "OpenZeppelin/openzeppelin-contracts@4.5.0/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 /**
  * @title Stake2Follow
@@ -12,13 +13,13 @@ import "OpenZeppelin/openzeppelin-contracts@4.5.0/contracts/token/ERC721/IERC721
  * @notice A contract to encourage follow on Lens Protocol by staking
  */
 
-contract stake2Follow {
+contract Stake2Follow is Initializable {
     using SafeERC20 for IERC20;
 
     address public owner;
     address public walletAddress;
     address public appAddress;
-    bool private stopped = false;
+    bool private stopped;
     IERC20 public currency;
 
     // contract deployed time
@@ -33,7 +34,19 @@ contract stake2Follow {
     uint256 public maxProfiles;
 
     // First N profiles free of fee in each round
-    uint256 public firstNFree = 0;
+    uint256 public firstNFree;
+
+    // portation that shares to profiles invites people in. n/1000
+    uint256 public inviteFee;
+
+    uint256 public MAXIMAL_PROFILES;
+
+    uint256 public ROUND_OPEN_LENGTH;
+    uint256 public ROUND_FREEZE_LENGTH;
+    uint256 public ROUND_GAP_LENGTH;
+
+    // when round duration changed, this factor will used to keep roundId persistent
+    uint256 public roundCompensate;
 
     // roundId => qualify info
     // qualify-bits   exclude-bits   claimed bits
@@ -49,14 +62,11 @@ contract stake2Follow {
     // profileId -> address
     mapping(uint256 => address) profileToAddress;
 
-    uint256 public constant MAXIMAL_PROFILES = 50;
-
-    uint256 public constant ROUND_OPEN_LENGTH = 3 hours;
-    uint256 public constant ROUND_FREEZE_LENGTH = 50 minutes;
-    uint256 public constant ROUND_GAP_LENGTH = 4 hours;
+    // share reward weight = profilesInvited
+    mapping(uint256 => mapping(uint256 => uint256)) inviteBonus;
 
     // Events
-    event ProfileStake(uint256 roundId, address profileAddress, uint256 stake, uint256 fees);
+    event ProfileStake(uint256 roundId, address profileAddress, uint256 stake, uint256 fees, uint256 refId);
     event ProfileQualify(uint256 roundId, uint256 qualify);
     event ProfileExclude(uint256 roundId, uint256 exclude);
     event ProfileClaim(uint256 roundId, uint256 profileId, uint256 fund);
@@ -68,10 +78,20 @@ contract stake2Follow {
     event SetMaxProfiles(uint256 profiles);
     event SetStakeValue(uint256 value);
     event SetFirstNFree(uint256 n);
+    event SetInviteFee(uint256 n);
+    event ResetRoundDuration(uint256 openLength, uint256 freezeLength, uint256 gapLength, uint256 roundCompensate);
     event WithdrawRoundFee(uint256 roundId, uint256 fee);
     event Withdraw(uint256 balance);
 
-    constructor(uint256 _stakeValue, uint256 _gasFee, uint256 _rewardFee, uint8 _maxProfiles, address _currency, address _appAddress, address _walletAddress) {
+    function initialize(
+        uint256 _stakeValue, 
+        uint256 _gasFee, 
+        uint256 _rewardFee, 
+        uint8 _maxProfiles, 
+        address _currency, 
+        address _appAddress, 
+        address _walletAddress
+    ) public initializer {
         currency = IERC20(_currency);
 
         gasFee = _gasFee;
@@ -82,6 +102,16 @@ contract stake2Follow {
         appAddress = _appAddress;
         walletAddress = _walletAddress;
 
+        firstNFree = 3;
+        inviteFee = 200;
+        MAXIMAL_PROFILES = 50;
+        ROUND_OPEN_LENGTH = 3 hours;
+        ROUND_FREEZE_LENGTH = 50 minutes;
+        ROUND_GAP_LENGTH = 4 hours;
+
+        roundCompensate = 0;
+
+        stopped = false;
         owner = msg.sender;
         genesis = block.timestamp;
     }
@@ -107,10 +137,20 @@ contract stake2Follow {
     }
 
     function isClaimable(uint256 roundId, uint256 profileIndex) internal view returns (bool) {
+       if (roundToProfiles[roundId].length == 1 && profileIndex == 0) {
+            // only one person scenario
+            return true;
+        } 
+
         return (((roundToQualify[roundId] >> profileIndex) & 1) == 1);
     }
 
     function isExcluded(uint256 roundId, uint256 profileIndex) internal view returns (bool) {
+        if (roundToProfiles[roundId].length == 1 && profileIndex == 0) {
+            // only one person scenario
+            return false;
+        }
+
         return (((roundToQualify[roundId] >> (profileIndex + 50)) & 1) == 1);
     }
 
@@ -130,13 +170,31 @@ contract stake2Follow {
         roundToQualify[roundId] |= (1 << profileIndex);
     }
 
+    // global round to local round
+    function compensateRound(uint256 roundId) internal view returns (uint256) {
+        if (((roundCompensate >> 255) & 1) == 1) {
+            return (roundId - (((1 << 255) - 1) & roundCompensate));
+        } else {
+            return (roundId + roundCompensate);
+        }
+    }
+
+    // local round to global round
+    function compensateRoundReverse(uint256 roundId) internal view returns (uint256) {
+        if (((roundCompensate >> 255) & 1) == 1) {
+            return (roundId + (((1 << 255) - 1) & roundCompensate));
+        } else {
+            return (roundId - roundCompensate);
+        }
+    }
+
     function isOpen(uint256 roundId) internal view returns (bool) {
-        uint256 startTime = genesis + roundId * ROUND_GAP_LENGTH;
+        uint256 startTime = genesis + compensateRound(roundId) * ROUND_GAP_LENGTH;
         return (block.timestamp > startTime && block.timestamp < (startTime + ROUND_OPEN_LENGTH));
     }
 
     function isSettle(uint256 roundId) internal view returns (bool) {
-        return (block.timestamp > (genesis + roundId * ROUND_GAP_LENGTH + ROUND_OPEN_LENGTH + ROUND_FREEZE_LENGTH));
+        return (block.timestamp > (genesis + compensateRound(roundId) * ROUND_GAP_LENGTH + ROUND_OPEN_LENGTH + ROUND_FREEZE_LENGTH));
     }
 
     function payCurrency(address to, uint256 amount) internal {
@@ -169,16 +227,29 @@ contract stake2Follow {
 
         uint256 profileNum = roundToProfiles[roundId].length;
         uint256 qualifyNum = 0;
+        uint256 shares = 0;
         for (uint256 i = 0; i < profileNum; i++) {
             if (isClaimable(roundId, i) && !isExcluded(roundId, i)) {
                 qualifyNum += 1;
+                shares += inviteBonus[roundId][roundToProfiles[roundId][i]];
             }
         }
 
         // adition fee to divide
         uint256 reward = stakeValue * (profileNum - qualifyNum);
-        uint256 fee = (reward / 1000) * rewardFee;
-        uint256 claimValue = stakeValue + ((reward - fee) / qualifyNum);
+        uint256 platformReward = reward * rewardFee / 1000;
+        uint256 inviteReward = 0;
+        if (shares > 0) {
+            // someone invited people in, create the inviteReward pool
+            inviteReward = reward * inviteFee / 1000;
+        }
+        // claim value contains staked amount and not-finished-profile's staked amount divided equally excludes inviteBonus portation
+        uint256 claimValue = stakeValue + ((reward - platformReward - inviteReward) / qualifyNum);
+
+        if (shares > 0 && inviteBonus[roundId][profileId] > 0) {
+            // this profile invited people in, add invite reward
+            claimValue = claimValue + inviteReward * inviteBonus[roundId][profileId] / shares;
+        }
 
         // Transfer the fund to profile
         payCurrency(profileToAddress[profileId], claimValue);
@@ -194,8 +265,9 @@ contract stake2Follow {
      * @param roundId the round id.
      * @param profileId The ID of len profile.
      * @param profileAddress The address of the profile that staking.
+     * @param refId The id that invite this profile
      */
-    function profileStake(uint256 roundId, uint256 profileId, address profileAddress) external stopInEmergency {
+    function profileStake(uint256 roundId, uint256 profileId, address profileAddress, uint256 refId) external stopInEmergency {
         // Check if the msg.sender is the profile owner
         require(msg.sender == profileAddress, "Sender is not the profile owner");
         // Check if the profile address is valid
@@ -204,7 +276,7 @@ contract stake2Follow {
         require(isOpen(roundId), "Round is not in open stage");
         // Check profile count
         require(roundToProfiles[roundId].length < maxProfiles, "Maximum profile limit reached");
-        // TODO: check not staked before
+        // check not staked before
         // total profiles is small, so this loop is ok
         bool alreadyIn = false;
         for (uint32 i = 0; i < roundToProfiles[roundId].length; i += 1) {
@@ -226,7 +298,7 @@ contract stake2Follow {
                 address(this),
                 stakeValue
             );
-            emit ProfileStake(roundId, profileAddress, stakeValue, 0);
+            emit ProfileStake(roundId, profileAddress, stakeValue, 0, refId);
         } else {
             // Calculate fee
             uint256 stakeFee = (stakeValue / 1000) * gasFee;
@@ -242,7 +314,7 @@ contract stake2Follow {
             if (stakeFee > 0) {
                 payCurrency(walletAddress, stakeFee);
             }
-            emit ProfileStake(roundId, profileAddress, stakeValue, stakeFee);
+            emit ProfileStake(roundId, profileAddress, stakeValue, stakeFee, refId);
         }
         
         // add profile
@@ -250,6 +322,9 @@ contract stake2Follow {
 
         // add round
         profileToRounds[profileId].push(roundId);
+
+        // set invite bonus
+        inviteBonus[roundId][refId] += 1;
     }
 
     /**
@@ -282,8 +357,8 @@ contract stake2Follow {
     }
 
     function getCurrentRound() public view returns (uint256 roundId, uint256 startTime) {
-        uint256 crrentRoundId = (block.timestamp - genesis) / ROUND_GAP_LENGTH;
-        return (crrentRoundId, genesis + crrentRoundId * ROUND_GAP_LENGTH);
+        uint256 localRoundId = (block.timestamp - genesis) / ROUND_GAP_LENGTH;
+        return (compensateRoundReverse(localRoundId), genesis + localRoundId * ROUND_GAP_LENGTH);
     }
 
     function getRoundData(uint256 roundId) public view returns (uint256 qualify, uint256[] memory profiles) {
@@ -292,6 +367,10 @@ contract stake2Follow {
 
     function getProfileRounds(uint256 profileId) public view returns (uint256[] memory roundIds) {
         return profileToRounds[profileId];
+    }
+
+    function  getProfileInvites(uint256 roundId, uint256 profileId) public view returns (uint256 invites) {
+        return inviteBonus[roundId][profileId];
     }
 
     function setApp(address _appAddress) public onlyOwner {
@@ -352,8 +431,19 @@ contract stake2Follow {
         return firstNFree;
     }
 
-    function getConfig() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256) {
-        return (stakeValue, gasFee, rewardFee, maxProfiles, genesis, ROUND_OPEN_LENGTH, ROUND_FREEZE_LENGTH, ROUND_GAP_LENGTH, firstNFree);
+    function setInviteFee(uint256 fee) public onlyOwner {
+        require(fee < 1000, "Fee invalid");
+        require(fee + rewardFee < 1000, "Fee invalid");
+        inviteFee = fee;
+        emit SetInviteFee(fee);
+    }
+
+    function getInviteFee() public view returns (uint256) {
+        return inviteFee;
+    }
+
+    function getConfig() public view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256) {
+        return (stakeValue, gasFee, rewardFee, maxProfiles, genesis, ROUND_OPEN_LENGTH, ROUND_FREEZE_LENGTH, ROUND_GAP_LENGTH, firstNFree, inviteFee, roundCompensate);
     }
 
     function setWallet(address wallet) public onlyOwner {
@@ -363,6 +453,26 @@ contract stake2Follow {
 
     function getWallet() public view returns (address) {
         return walletAddress;
+    }
+
+    function resetRoundDuration(uint256 openLength, uint256 freezeLength, uint256 gapLength) public onlyInEmergency onlyOwner {
+        require(openLength + freezeLength <= gapLength, "Invalid round duration");
+
+        uint256 oldRoundId = compensateRoundReverse((block.timestamp - genesis) / ROUND_GAP_LENGTH);
+        uint256 newRoundId = (block.timestamp - genesis) / gapLength;
+        if (newRoundId >= oldRoundId + 1) {
+            roundCompensate = newRoundId - oldRoundId - 1;
+        } else {
+            roundCompensate = oldRoundId + 1 - newRoundId;
+            // 255-th bit mark negtive
+            roundCompensate |= (1 << 255);
+        }
+
+        ROUND_OPEN_LENGTH = openLength;
+        ROUND_FREEZE_LENGTH = freezeLength;
+        ROUND_GAP_LENGTH = gapLength;
+
+        emit ResetRoundDuration(openLength, freezeLength, gapLength, roundCompensate);
     }
 
     function circuitBreaker() public onlyOwner {

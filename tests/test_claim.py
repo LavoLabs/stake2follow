@@ -15,9 +15,9 @@ def stake(stake2follow, accounts):
   roundId, roundStartTime = stake2follow.getCurrentRound()
 
   # 3 paticipants
-  stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
-  stake2follow.profileStake(roundId, 2, accounts[2], {'from': accounts[2]})
-  stake2follow.profileStake(roundId, 3, accounts[3], {'from': accounts[3]})
+  stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
+  stake2follow.profileStake(roundId, 2, accounts[2], 0, {'from': accounts[2]})
+  stake2follow.profileStake(roundId, 3, accounts[3], 0, {'from': accounts[3]})
 
   return roundId, config[5], config[6], config[7]
 
@@ -30,7 +30,7 @@ def stake_one(stake2follow, accounts):
   roundId, roundStartTime = stake2follow.getCurrentRound()
 
   # 1 paticipants
-  stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
+  stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
 
   return roundId, config[5], config[6], config[7]
 
@@ -59,6 +59,14 @@ def test_claim_with_no_qualify_should_fail(accounts, contracts):
   chain.mine(1)
   with brownie.reverts():
     stake2follow.profileClaim(roundId, 0, 1, {'from': accounts[1]})
+
+def test_claim_with_no_qualify_but_only_one_player_should_success(accounts, contracts):
+  stake2follow, currency = contracts
+  roundId, roundOpenDur, roundFreezeDur, roundGap = stake_one(stake2follow, accounts)
+
+  chain.sleep(roundOpenDur + roundFreezeDur)
+  chain.mine(1)
+  stake2follow.profileClaim(roundId, 0, 1, {'from': accounts[1]})
 
 def test_claim_with_qualify_but_exclude_should_fail(accounts, contracts):
   stake2follow, currency = contracts
@@ -253,3 +261,177 @@ def test_claim_only_one_profile_paticipant(accounts, contracts):
 
   assert afterValueProfile == beforeValueProfile - stakeValue * stakeFee / 1000
   assert beforeValue == afterValue - stakeValue * stakeFee / 1000
+
+def test_claim_only_one_profile_paticipant_not_do_qualify(accounts, contracts):
+  stake2follow, currency = contracts
+  stake2follow.setFirstNFree(0)
+
+  beforeValue = currency.balanceOf(accounts[9])
+  beforeValueProfile = currency.balanceOf(accounts[1])
+
+  roundId, roundOpenDur, roundFreezeDur, roundGap = stake_one(stake2follow, accounts)
+
+  chain.sleep(roundOpenDur)
+  chain.mine(1)
+
+  roundData = stake2follow.getRoundData(roundId, {'from': accounts[8]})
+  print('x round data: {0:b}'.format(roundData[0]))
+
+  chain.sleep(roundFreezeDur)
+
+  config = stake2follow.getConfig()
+  stakeValue = config[0]
+  stakeFee = config[1]
+  rewardFee = config[2]
+
+  stake2follow.profileClaim(roundId, 0, 1, {'from': accounts[1]})
+
+  afterValue = currency.balanceOf(accounts[9])
+  afterValueProfile = currency.balanceOf(accounts[1])
+
+  assert afterValueProfile == beforeValueProfile - stakeValue * stakeFee / 1000
+  assert beforeValue == afterValue - stakeValue * stakeFee / 1000
+
+def test_claim_with_invites_only_one_profile_invite(accounts, contracts):
+  stake2follow, currency = contracts
+  stake2follow.setFirstNFree(0)
+
+  beforeValueProfile1 = currency.balanceOf(accounts[1])
+  beforeValueProfile2 = currency.balanceOf(accounts[2])
+
+  roundId, roundOpenDur, roundFreezeDur, roundGap = stake_one(stake2follow, accounts)
+  stake2follow.profileStake(roundId, 2, accounts[2], 1, {'from': accounts[2]})
+  stake2follow.profileStake(roundId, 3, accounts[3], 1, {'from': accounts[3]})
+
+  assert stake2follow.getProfileInvites(roundId, 1) == 2
+  assert stake2follow.getProfileInvites(roundId, 2) == 0
+
+  chain.sleep(roundOpenDur)
+  chain.mine(1)
+
+  stake2follow.profileQualify(roundId, 1, {'from': accounts[8]})
+  stake2follow.profileQualify(roundId, 2, {'from': accounts[8]})
+
+  roundData = stake2follow.getRoundData(roundId, {'from': accounts[8]})
+  print('x round data: {0:b}'.format(roundData[0]))
+
+  chain.sleep(roundFreezeDur)
+
+  config = stake2follow.getConfig()
+  stakeValue = config[0]
+  stakeFee = config[1]
+  rewardFee = config[2]
+  inviteFee = config[9]
+
+  platformReward = (stakeValue * rewardFee / 1000)
+  inviteValue = (stakeValue * inviteFee / 1000)
+  commonReward = (stakeValue - platformReward - inviteValue) / 2
+
+  tx1 = stake2follow.profileClaim(roundId, 0, 1, {'from': accounts[1]})
+  assert tx1.events['ProfileClaim'][0]['fund'] == stakeValue + commonReward + inviteValue
+  tx2 = stake2follow.profileClaim(roundId, 1, 2, {'from': accounts[2]})
+  assert tx2.events['ProfileClaim'][0]['fund'] == stakeValue + commonReward
+
+  afterValueProfile1 = currency.balanceOf(accounts[1])
+  afterValueProfile2 = currency.balanceOf(accounts[2])
+
+  assert afterValueProfile1 == beforeValueProfile1 - stakeValue -  stakeValue * stakeFee / 1000 +  tx1.events['ProfileClaim'][0]['fund']
+  assert afterValueProfile2 == beforeValueProfile2 - stakeValue -  stakeValue * stakeFee / 1000 +  tx2.events['ProfileClaim'][0]['fund']
+
+
+
+def test_claim_with_invites_more_than_one_profile_invite(accounts, contracts):
+  stake2follow, currency = contracts
+  stake2follow.setFirstNFree(0)
+
+  beforeValueProfile1 = currency.balanceOf(accounts[1])
+  beforeValueProfile2 = currency.balanceOf(accounts[2])
+
+  roundId, roundOpenDur, roundFreezeDur, roundGap = stake_one(stake2follow, accounts)
+  stake2follow.profileStake(roundId, 2, accounts[2], 1, {'from': accounts[2]})
+  stake2follow.profileStake(roundId, 3, accounts[3], 2, {'from': accounts[3]})
+
+  assert stake2follow.getProfileInvites(roundId, 1) == 1
+  assert stake2follow.getProfileInvites(roundId, 2) == 1
+
+  chain.sleep(roundOpenDur)
+  chain.mine(1)
+
+  stake2follow.profileQualify(roundId, 1, {'from': accounts[8]})
+  stake2follow.profileQualify(roundId, 2, {'from': accounts[8]})
+
+  roundData = stake2follow.getRoundData(roundId, {'from': accounts[8]})
+  print('x round data: {0:b}'.format(roundData[0]))
+
+  chain.sleep(roundFreezeDur)
+
+  config = stake2follow.getConfig()
+  stakeValue = config[0]
+  stakeFee = config[1]
+  rewardFee = config[2]
+  inviteFee = config[9]
+
+  platformReward = (stakeValue * rewardFee / 1000)
+  inviteValue = (stakeValue * inviteFee / 1000)
+  commonReward = (stakeValue - platformReward - inviteValue) / 2
+
+  tx1 = stake2follow.profileClaim(roundId, 0, 1, {'from': accounts[1]})
+  assert tx1.events['ProfileClaim'][0]['fund'] == stakeValue + commonReward + inviteValue / 2
+  tx2 = stake2follow.profileClaim(roundId, 1, 2, {'from': accounts[2]})
+  assert tx2.events['ProfileClaim'][0]['fund'] == stakeValue + commonReward + inviteValue / 2
+
+  afterValueProfile1 = currency.balanceOf(accounts[1])
+  afterValueProfile2 = currency.balanceOf(accounts[2])
+
+  assert afterValueProfile1 == beforeValueProfile1 - stakeValue -  stakeValue * stakeFee / 1000 +  tx1.events['ProfileClaim'][0]['fund']
+  assert afterValueProfile2 == beforeValueProfile2 - stakeValue -  stakeValue * stakeFee / 1000 +  tx2.events['ProfileClaim'][0]['fund']
+
+
+
+def test_claim_with_invites_more_than_one_profile_invite_different_invites(accounts, contracts):
+  stake2follow, currency = contracts
+  stake2follow.setFirstNFree(0)
+
+  beforeValueProfile1 = currency.balanceOf(accounts[1])
+  beforeValueProfile2 = currency.balanceOf(accounts[2])
+
+  roundId, roundOpenDur, roundFreezeDur, roundGap = stake_one(stake2follow, accounts)
+  stake2follow.profileStake(roundId, 2, accounts[2], 1, {'from': accounts[2]})
+  stake2follow.profileStake(roundId, 3, accounts[3], 2, {'from': accounts[3]})
+  stake2follow.profileStake(roundId, 4, accounts[4], 2, {'from': accounts[4]})
+
+  assert stake2follow.getProfileInvites(roundId, 1) == 1
+  assert stake2follow.getProfileInvites(roundId, 2) == 2
+
+  chain.sleep(roundOpenDur)
+  chain.mine(1)
+
+  stake2follow.profileQualify(roundId, 1, {'from': accounts[8]})
+  stake2follow.profileQualify(roundId, 2, {'from': accounts[8]})
+  stake2follow.profileQualify(roundId, 4, {'from': accounts[8]})
+
+  roundData = stake2follow.getRoundData(roundId, {'from': accounts[8]})
+  print('x round data: {0:b}'.format(roundData[0]))
+
+  chain.sleep(roundFreezeDur)
+
+  config = stake2follow.getConfig()
+  stakeValue = config[0]
+  stakeFee = config[1]
+  rewardFee = config[2]
+  inviteFee = config[9]
+
+  platformReward = (stakeValue * rewardFee / 1000)
+  inviteValue = (stakeValue * inviteFee / 1000)
+  commonReward = math.floor((stakeValue - platformReward - inviteValue) / 3)
+
+  tx1 = stake2follow.profileClaim(roundId, 0, 1, {'from': accounts[1]})
+  assert tx1.events['ProfileClaim'][0]['fund'] == stakeValue + commonReward + math.floor(inviteValue / 3)
+  tx2 = stake2follow.profileClaim(roundId, 1, 2, {'from': accounts[2]})
+  assert tx2.events['ProfileClaim'][0]['fund'] == stakeValue + commonReward + math.floor(inviteValue * 2 / 3)
+
+  afterValueProfile1 = currency.balanceOf(accounts[1])
+  afterValueProfile2 = currency.balanceOf(accounts[2])
+
+  assert afterValueProfile1 == beforeValueProfile1 - stakeValue -  stakeValue * stakeFee / 1000 +  tx1.events['ProfileClaim'][0]['fund']
+  assert afterValueProfile2 == beforeValueProfile2 - stakeValue -  stakeValue * stakeFee / 1000 +  tx2.events['ProfileClaim'][0]['fund']

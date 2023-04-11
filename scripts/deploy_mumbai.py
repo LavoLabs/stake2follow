@@ -32,8 +32,7 @@ def deploy():
     usdc.address,
     hub,
     owner,
-    {'from': accounts[0]},
-    publish_source=True
+    {'from': accounts[0]}
   )
 
   return sf, usdc

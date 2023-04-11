@@ -60,7 +60,7 @@ def test_get_round_data(accounts, contracts):
   # fast-forward
   for i in range(10):
     roundId, roundStartTime = stake2follow.getCurrentRound()
-    stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
+    stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
 
     chain.sleep(roundOpenDur)
     chain.mine(1)
@@ -93,7 +93,7 @@ def test_get_profile_rounds(accounts, contracts):
     chain.mine(1)
 
     roundId, roundStartTime = stake2follow.getCurrentRound()
-    stake2follow.profileStake(roundId, 1, accounts[1], {'from': accounts[1]})
+    stake2follow.profileStake(roundId, 1, accounts[1], 0, {'from': accounts[1]})
 
   rounds = stake2follow.getProfileRounds(1, {'from': accounts[8]})
   assert len(rounds) == 10
